@@ -103,6 +103,9 @@ def solve(solver, context):
         context.hdf5file.update(params, **context)
 
         solver.timer()
+        
+        if solver.rank == 0:
+            print(f"Time step = {params.tstep:06d}, time = {params.t:4.2f}")
 
         if not solver.profiler.getstats() and params.make_profile:
             #Enable profiling after first step is finished

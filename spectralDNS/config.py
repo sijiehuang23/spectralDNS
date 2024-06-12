@@ -214,7 +214,7 @@ triplyperiodic = argparse.ArgumentParser(parents=[parser])
 triplyperiodic.add_argument('--convection', default='Vortex',
                             choices=('Standard', 'Divergence', 'Skewed', 'Vortex'),
                             help='Choose method for computing the nonlinear convective term')
-triplyperiodic.add_argument('--L', default=[2*pi, 2*pi, 2*pi], metavar=("Lx", "Ly", "Lz"), nargs=3,
+triplyperiodic.add_argument('--L', default=[2.*pi, 2.*pi, 2.*pi], metavar=("Lx", "Ly", "Lz"), nargs=3,
                             help='Physical mesh size')
 
 triplyperiodic.add_argument('--M', default=[6, 6, 6], metavar=("Mx", "My", "Mz"), nargs=3,
@@ -243,7 +243,7 @@ doublyperiodic = argparse.ArgumentParser(parents=[parser])
 doublyperiodic.add_argument('--integrator', default='RK4',
                             choices=('RK4', 'ForwardEuler', 'AB2', 'BS5_fixed', 'BS5_adaptive'),
                             help='Integrator for doubly periodic domain')
-doublyperiodic.add_argument('--L', default=[2*pi, 2*pi], nargs=2, metavar=('Lx', 'Ly'),
+doublyperiodic.add_argument('--L', default=[2.*pi, 2.*pi], nargs=2, metavar=('Lx', 'Ly'),
                             help='Physical mesh size')
 doublyperiodic.add_argument('--convection', default='Vortex',
                             choices=('Vortex'),
@@ -257,8 +257,10 @@ doublesubparsers = doublyperiodic.add_subparsers(dest='solver')
 
 parser_NS2D = doublesubparsers.add_parser('NS2D', help='Regular 2D Navier Stokes solver')
 parser_Bq2D = doublesubparsers.add_parser('Bq2D', help='Regular 2D Navier Stokes solver with Boussinesq model.')
+parser_AD2D = doublesubparsers.add_parser('AD2D', help='2D Advection-Diffusion solver with constant advection velocity')
 parser_Bq2D.add_argument('--Ri', default=0.1, type=float, help='Richardson number')
 parser_Bq2D.add_argument('--Pr', default=1.0, type=float, help='Prandtl number')
+parser_AD2D.add_argument('--advection_velocity', default=[1.0, 0.0], type=float, help='Advection velocity')
 
 # Arguments for channel solvers with one inhomogeneous direction
 channel = argparse.ArgumentParser(parents=[parser])
