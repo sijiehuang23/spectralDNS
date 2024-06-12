@@ -41,7 +41,7 @@ def get_context():
     for i in range(dim):
         K2 += K[i]*K[i]
 
-    # Velocity and pressure. Use ndarray view for efficiency
+    # Scalar field. Use ndarray view for efficiency
     C = Array(T)
     C_hat = Function(T)
     c_dealias = Array(Tp)
@@ -59,6 +59,8 @@ def get_context():
                                   'data': {'0': {'C': [C_hat]}}},
                       results={'space': T,
                                'data': {'C': [C]}})
+
+    # print(hex(id(C))==hex(id(hdf5file.results['data']['C'][0])))
 
     return config.AttributeDict(locals())
 

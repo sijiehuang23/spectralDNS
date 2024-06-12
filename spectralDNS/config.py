@@ -177,6 +177,8 @@ parser.add_argument('--T', default=0.1, type=float,
                     help='End time')
 parser.add_argument('--write_result', default=1e8, metavar=('tstep'), type=int,
                     help='Write results to HDF5 every tstep')
+parser.add_argument('--checkinterval', default=100, type=int,
+                    help='Print progress every... time step')
 parser.add_argument('--checkpoint', default=1e8, type=int,
                     help='Save intermediate result every...')
 parser.add_argument('--nu', default=0.000625, type=float,
@@ -260,7 +262,7 @@ parser_Bq2D = doublesubparsers.add_parser('Bq2D', help='Regular 2D Navier Stokes
 parser_AD2D = doublesubparsers.add_parser('AD2D', help='2D Advection-Diffusion solver with constant advection velocity')
 parser_Bq2D.add_argument('--Ri', default=0.1, type=float, help='Richardson number')
 parser_Bq2D.add_argument('--Pr', default=1.0, type=float, help='Prandtl number')
-parser_AD2D.add_argument('--advection_velocity', default=[1.0, 0.0], type=float, help='Advection velocity')
+parser_AD2D.add_argument('--advection_velocity', default=[1.0, 0.0], type=float, help='Advection velocity', nargs=2)
 
 # Arguments for channel solvers with one inhomogeneous direction
 channel = argparse.ArgumentParser(parents=[parser])

@@ -63,11 +63,16 @@ def get_context():
     Source = Function(VT) # Possible source term initialized to zero
     work = work_arrays()
 
+    # hdf5file = NSFile(config.params.solver,
+    #                   checkpoint={'space': VT,
+    #                               'data': {'0': {'U': [U_hat]}}},
+    #                   results={'space': VT,
+                            #    'data': {'U': [U], 'P': [P]}})
     hdf5file = NSFile(config.params.solver,
                       checkpoint={'space': VT,
                                   'data': {'0': {'U': [U_hat]}}},
-                      results={'space': VT,
-                               'data': {'U': [U], 'P': [P]}})
+                      results={'space': T,
+                               'data': {'P': [P]}})
 
     return config.AttributeDict(locals())
 

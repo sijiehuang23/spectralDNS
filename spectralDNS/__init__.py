@@ -81,6 +81,7 @@ def solve(solver, context):
 
     solver.timer = solver.Timer()
     params = solver.params
+    solver.timer.start(params.verbose)
 
     solver.conv = solver.getConvection(params.convection)
 
@@ -90,6 +91,9 @@ def solve(solver, context):
                                      context)
 
     dt_in = params.dt
+
+    # write initial condition
+    context.hdf5file.update(params, **context)
 
     while params.t + params.dt <= params.T+1e-12:
 
@@ -104,8 +108,8 @@ def solve(solver, context):
 
         solver.timer()
         
-        if solver.rank == 0:
-            print(f"Time step = {params.tstep:06d}, time = {params.t:4.2f}")
+        if solver.rank == 0 and params.tstep % params.checkinterval == 0:
+            print(f"Time step = {params.tstep:06d}, simulation time = {params.t:4.2f}")
 
         if not solver.profiler.getstats() and params.make_profile:
             #Enable profiling after first step is finished

@@ -6,6 +6,7 @@ __date__ = "2014-11-07"
 __copyright__ = "Copyright (C) 2014-2018 " + __author__
 __license__ = "GNU Lesser GPL version 3 or any later version"
 
+from datetime import datetime
 from time import time
 import types
 from mpi4py import MPI
@@ -29,6 +30,7 @@ class Timer(object):
         self.slowest_timestep = 0
         self.t0 = time()
         self.tic = self.t0
+        self.current_time = datetime.now().strftime("%Y-%m-%d, %H:%M:%S")
 
     def __call__(self):
         """Call for intermediate sampling of timings of complete time steps"""
@@ -37,6 +39,11 @@ class Timer(object):
         self.fastest_timestep = min(dt, self.fastest_timestep)
         self.slowest_timestep = max(dt, self.slowest_timestep)
         self.t0 = t1
+        
+    def start(self, verbose=True):
+        comm = MPI.COMM_WORLD
+        if comm.Get_rank() == 0 and verbose:
+            print("\nStarting simulation at: ", self.current_time,"\n")
 
     def final(self, verbose=True):
         """Called at the end of a simulation.
@@ -60,12 +67,14 @@ class Timer(object):
                 comm.reduce(self.slowest_timestep, op=MPI.MIN, root=0))
         slow = (comm.reduce(self.fastest_timestep, op=MPI.MAX, root=0),
                 comm.reduce(self.slowest_timestep, op=MPI.MAX, root=0))
+        self.current_time = datetime.now().strftime("%Y-%m-%d, %H:%M:%S")
 
         toc = time() - self.tic
         if comm.Get_rank() == 0 and verbose:
-            print("Time = {}".format(toc))
-            print("Fastest = {}".format(fast))
-            print("Slowest = {}".format(slow))
+            print("\nSimulation time = {0:6f}s".format(toc))
+            print("\tFastest = {}s".format(fast))
+            print("\tSlowest = {}s".format(slow))
+            print("\nSimulation ended at: ", self.current_time)
 
 
 def inheritdocstrings(cls):
