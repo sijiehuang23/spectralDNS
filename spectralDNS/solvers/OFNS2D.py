@@ -8,6 +8,8 @@ __license__ = "GNU Lesser GPL version 3 or any later version"
 # Reuses most of NS.py module, but curl in 2D is a scalar
 from shenfun import FunctionSpace, CompositeSpace, TensorProductSpace, VectorSpace, Array, Function
 from .spectralinit import *
+import numpy as np
+from .NS import end_of_tstep
 
 def get_context():
     """Set up context for 2D odd fluctuating Navier-Stokes solver (OFNS)"""
@@ -105,7 +107,7 @@ def set_scalar(C, C_hat, T, **context):
     """Compute velocity from context"""
     C_hat = T.forward(C, C_hat)
     return C_hat
-        
+
 def get_curl(curl, W_hat, U_hat, work, T, K, **context):
     W_hat[:] = 0
     W_hat = cross2(W_hat, K, U_hat)
@@ -137,10 +139,11 @@ def getConvection(convection):
             c_dealias = uc_dealias[2]
             
             # momentum equation
-            curl_dealias = work[(u_dealias[0], 0, False)]
-            curl_hat = work[(rhs[0], 0, False)]
-
-            curl_hat = cross2(curl_hat, K, uc_hat[:2])
+            curl_dealias = work[(u_dealias[0], 0, True)]
+            curl_hat = work[(rhs[0], 0, True)]
+            
+            # curl_hat = cross2(curl_hat, K, uc_hat[:2])
+            curl_hat = 1j*(K[0]*uc_hat[1]-K[1]*uc_hat[0])
             curl_dealias = Tp.backward(curl_hat, curl_dealias)
             
             rhs[0] = Tp.forward(u_dealias[1]*curl_dealias, rhs[0])

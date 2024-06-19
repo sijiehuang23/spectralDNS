@@ -109,7 +109,7 @@ def solve(solver, context):
         solver.timer()
         
         if solver.rank == 0 and params.tstep % params.checkinterval == 0:
-            print(f"Time step = {params.tstep:06d}, simulation time = {params.t:4.2f}")
+            print(f"Step = {params.tstep:06d}, time = {params.t:8.4e}, dt = {params.dt:6.4e}")
 
         if not solver.profiler.getstats() and params.make_profile:
             #Enable profiling after first step is finished
@@ -119,9 +119,10 @@ def solve(solver, context):
             break
 
     params.dt = dt_in
-
     solver.timer.final(params.verbose)
-
+    
+    # context.hdf5file.update(params, **context)
+    
     if params.make_profile:
         solver.results = solver.create_profile(solver.profiler)
 

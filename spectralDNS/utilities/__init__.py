@@ -71,7 +71,9 @@ class Timer(object):
 
         toc = time() - self.tic
         if comm.Get_rank() == 0 and verbose:
-            print("\nSimulation time = {0:6f}s".format(toc))
+            print(f"\nStep = {config.params.tstep: 06d}, time = {config.params.t: 8.4f}, dt = {config.params.dt: 8.6e}")
+            print("\tTarget time = {}".format(config.params.T))
+            print("\nRun time = {0:6f}s".format(toc))
             print("\tFastest = {}s".format(fast))
             print("\tSlowest = {}s".format(slow))
             print("\nSimulation ended at: ", self.current_time)

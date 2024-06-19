@@ -7,6 +7,8 @@ __copyright__ = "Copyright (C) 2015-2018 " + __author__
 __license__ = "GNU Lesser GPL version 3 or any later version"
 
 from ..optimization import optimizer
+import matplotlib.pyplot as plt
+import numpy as np
 
 __all__ = ['cross1', 'cross2']
 
@@ -29,4 +31,5 @@ def cross2(c, a, b):
     """ c = 1j*(a x b), where type(a) is int/float and type(b) is complex"""
     c = cross1(c, a, b)
     c *= 1j
+    
     return c
