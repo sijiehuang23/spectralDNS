@@ -97,7 +97,9 @@ def solve(solver, context):
 
     while params.t + params.dt <= params.T+1e-12:
 
+        print(hex(id(context.u)))
         u, params.dt, dt_took = integrate()
+        print(hex(id(context.u)))
 
         params.t += dt_took
         params.tstep += 1

@@ -27,6 +27,7 @@ def get_context():
                            collapse_fourier=collapse_fourier, **kw0)
     VT = VectorSpace(T)
     VM = CompositeSpace([T]*(dim+1))
+    VW = CompositeSpace([T]*(dim**2))
 
     mask = T.get_mask_nyquist() if params.mask_nyquist else None
 
@@ -56,9 +57,9 @@ def get_context():
     P = Array(T)
     P_hat = Function(T)
     curl = Array(T)
-    W_hat = Function(T)
-    u_dealias = Array(VTp)
     uc_dealias = Array(VMp)
+    W = Array(VW)
+    W_hat = Function(VW)
 
     # Create views into large data structures
     C = Uc[2]
@@ -108,23 +109,32 @@ def set_scalar(C, C_hat, T, **context):
     C_hat = T.forward(C, C_hat)
     return C_hat
 
-def get_curl(curl, W_hat, U_hat, work, T, K, **context):
-    W_hat[:] = 0
-    W_hat = cross2(W_hat, K, U_hat)
-    curl = W_hat.backward(curl)
-    return curl
+def add_thermal_fluctuation(rhs, wi, dt, dx, mag, w, w_hat, K, VW, **context):
+    W_A = np.random.randn(*np.shape(w))
+    W_B = np.random.randn(*np.shape(w))
+    W_i = W_A + wi*W_B
+    
+    # symmetrize 
+    w[0] = W_i[0]+W_i[0]
+    w[1] = W_i[1]+W_i[2]
+    w[2] = W_i[2]+W_i[1]
+    w[3] = W_i[3]+W_i[3]
+    w *= 0.5**0.5*mag/np.sqrt(dt*np.prod(dx))
+    
+    # forward Fourier transform 
+    w_hat = VW.forward(w, w_hat)
+    
+    # take divergence and add to rhs 
+    rhs[0] += 1j*(K[0]*w_hat[0]+K[1]*w_hat[1])
+    rhs[1] += 1j*(K[0]*w_hat[2]+K[1]*w_hat[3])
+    
+    return rhs
 
-def get_divergence(T, K, U_hat, mask, **context):
-    div_u = Array(T)
-    div_u_hat = 1j*(K[0]*U_hat[0]+K[1]*U_hat[1])
-    div_u = T.backward(div_u_hat, div_u)
-    return div_u
-
-def add_thermal_fluctuation():
-    pass 
-
-def add_odd_viscous():
-    pass 
+def add_odd_viscous(rhs, uc_hat, K2, nu_odd, **context):
+    rhs[0] +=  nu_odd*K2*uc_hat[1]
+    rhs[1] += -nu_odd*K2*uc_hat[0]
+    
+    return rhs
 
 def getConvection(convection):
     """Return function used to compute nonlinear term"""
@@ -180,15 +190,22 @@ def add_pressure_diffusion(rhs, uc_hat, P_hat, K_over_K2, K, K2, nu, alpha):
     
     return rhs
 
-def ComputeRHS(rhs, uc_hat, solver, work, K, K2, K_over_K2, P_hat, T, Tp,
-               VM, VMp, uc_dealias, mask, **context):
+def ComputeRHS(rhs, uc_hat, solver, wi, work, K, K2, K_over_K2, P_hat, T, Tp,
+               VM, VMp, VW, uc_dealias, mask, W, W_hat, **context):
     
+    # Compute nonlinear convection term 
     rhs = solver.conv(rhs, uc_hat, work, Tp, VMp, K, uc_dealias)
     
-    #TODO add thermal fluctuation and odd viscous terms 
+    # add odd viscous term
+    rhs = solver.add_odd_viscous(rhs, uc_hat, K2, params.nu_odd)
+    
+    # add thermal fluctuation
+    # rhs = solver.add_thermal_fluctuation(rhs, wi, params.dt, params.dx, params.mag_thermal_fluctuation, W, W_hat, K, VW)
     
     if mask is not None:
         rhs.mask_nyquist(mask)
+        
+    # add diffusion term, then project to divergence-free space
     rhs = solver.add_pressure_diffusion(rhs, uc_hat, P_hat, K_over_K2, K, K2, params.nu, params.alpha)
 
     return rhs

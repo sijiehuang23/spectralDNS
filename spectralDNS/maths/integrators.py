@@ -159,6 +159,16 @@ def RK4(u0, u1, u2, rhs, a, b, dt, solver, context):
     return u0, dt, dt
 
 @optimizer
+def stochasticRK3(u0, u1, rhs, a, b, wi, dt, solver, context):
+    """stochastic RK3 following Delong et al. (2013, PRE)"""
+    """Specific to the fluctuating NS equation"""
+    for rk in range(3):
+        rhs = solver.ComputeRHS(rhs, u0, solver, wi[rk], **context)
+        u0[:] = a[rk]*u1 + b[rk]*(u0 + dt*rhs)
+    
+    return u0, dt, dt
+
+@optimizer
 def ForwardEuler(u0, rhs, dt, solver, context):
     rhs = solver.ComputeRHS(rhs, u0, solver, **context)
     u0 += rhs*dt
@@ -188,6 +198,18 @@ def getintegrator(rhs, u0, solver, context):
         @wraps(RK4)
         def func():
             return RK4(u0, u1, u2, rhs, a, b, params.dt, solver, context)
+        return func
+    
+    elif params.integrator == 'stochasticRK3':
+        assert params.solver=='OFNS2D' or params.solver=='OFNS3D', "stochasticRK3 is only implemented for OFNS2D and OFNS3D"
+        a = np.array([0.0, 3.0/4.0, 1.0/3.0], dtype=context.float)
+        b = np.array([1.0, 1.0/4.0, 2.0/3.0], dtype=context.float)
+        w_i = np.array([(8**0.5 + 3**0.5)/5, 
+                        (-32**0.5 + 27**0.5)/5,
+                        (2**0.5 - 12**0.5)/10], dtype=context.float)
+        @wraps(stochasticRK3)
+        def func():
+            return stochasticRK3(u0, u1, rhs, a, b, w_i, params.dt, solver, context)
         return func
 
     elif params.integrator in ("BS5_adaptive", "BS5_fixed"):
