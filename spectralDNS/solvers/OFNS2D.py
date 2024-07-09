@@ -78,7 +78,7 @@ def get_context():
                       checkpoint={'space': VT,
                                   'data': {'0': {'Uc': [Uc_hat]}}},
                       results={'space': VT,
-                               'data': {'Uc': [Uc], 'P': [P]}})
+                               'data': {'Uc': [Uc]}})
     
     return config.AttributeDict(locals())
 
@@ -109,9 +109,14 @@ def set_scalar(C, C_hat, T, **context):
     C_hat = T.forward(C, C_hat)
     return C_hat
 
-def add_thermal_fluctuation(rhs, wi, dt, dx, mag, w, w_hat, K, VW, **context):
-    W_A = np.random.randn(*np.shape(w))
-    W_B = np.random.randn(*np.shape(w))
+def generate_noise(W, W_hat, VW, work, **context):
+    W_A = np.random.randn(*np.shape(W))
+    W_B = np.random.randn(*np.shape(W))
+    
+    # return W_A_hat, W_B_hat
+    return W_A, W_B
+
+def add_thermal_fluctuation(rhs, W_A, W_B, wi, dt, dx, mag, w, w_hat, K, VW, **context):
     W_i = W_A + wi*W_B
     
     # symmetrize 
@@ -119,10 +124,11 @@ def add_thermal_fluctuation(rhs, wi, dt, dx, mag, w, w_hat, K, VW, **context):
     w[1] = W_i[1]+W_i[2]
     w[2] = W_i[2]+W_i[1]
     w[3] = W_i[3]+W_i[3]
-    w *= 0.5**0.5*mag/np.sqrt(dt*np.prod(dx))
+    w *= 0.5**0.5
     
     # forward Fourier transform 
     w_hat = VW.forward(w, w_hat)
+    w_hat *= mag/np.sqrt(dt)
     
     # take divergence and add to rhs 
     rhs[0] += 1j*(K[0]*w_hat[0]+K[1]*w_hat[1])
@@ -172,41 +178,45 @@ def getConvection(convection):
     return Conv
 
 @optimizer
-def add_pressure_diffusion(rhs, uc_hat, P_hat, K_over_K2, K, K2, nu, alpha):
-    u_hat = uc_hat[:2]
-    c_hat = uc_hat[2]
-
+def projection(rhs, P_hat, K_over_K2, K):
     # Compute Leray projection 
     P_hat = np.sum(rhs[:2]*K_over_K2, 0, out=P_hat)
 
     # Add pressure gradient
-    for i in range(2):
+    for i in range(rhs.shape[0]-1):
         rhs[i] -= P_hat*K[i]
-
-    # Add contribution from diffusion
-    rhs[0] -= nu*K2*u_hat[0]
-    rhs[1] -= nu*K2*u_hat[1]
-    rhs[2] -= alpha*K2*c_hat
     
     return rhs
 
-def ComputeRHS(rhs, uc_hat, solver, wi, work, K, K2, K_over_K2, P_hat, T, Tp,
+def add_diffusion(rhs, uc_hat, K2, nu, alpha, **context):
+    # Add diffusion
+    rhs[0] -= nu*K2*uc_hat[0]
+    rhs[1] -= nu*K2*uc_hat[1]
+    rhs[2] -= alpha*K2*uc_hat[2]
+    
+    return rhs 
+
+
+def ComputeRHS(rhs, uc_hat, solver, W_A, W_B, wi, work, K, K2, K_over_K2, P_hat, T, Tp,
                VM, VMp, VW, uc_dealias, mask, W, W_hat, **context):
     
     # Compute nonlinear convection term 
     rhs = solver.conv(rhs, uc_hat, work, Tp, VMp, K, uc_dealias)
     
     # add odd viscous term
-    rhs = solver.add_odd_viscous(rhs, uc_hat, K2, params.nu_odd)
+    # rhs = solver.add_odd_viscous(rhs, uc_hat, K2, params.nu_odd)
     
     # add thermal fluctuation
-    # rhs = solver.add_thermal_fluctuation(rhs, wi, params.dt, params.dx, params.mag_thermal_fluctuation, W, W_hat, K, VW)
+    rhs = solver.add_thermal_fluctuation(rhs, W_A, W_B, wi, params.dt, params.dx, params.mag_thermal_fluctuation, W, W_hat, K, VW)
     
     if mask is not None:
         rhs.mask_nyquist(mask)
         
-    # add diffusion term, then project to divergence-free space
-    rhs = solver.add_pressure_diffusion(rhs, uc_hat, P_hat, K_over_K2, K, K2, params.nu, params.alpha)
+    # project to divergence-free space
+    rhs = solver.projection(rhs, P_hat, K_over_K2, K)
+    
+    # add diffusion
+    rhs = solver.add_diffusion(rhs, uc_hat, K2, params.nu, params.alpha)
 
     return rhs
 

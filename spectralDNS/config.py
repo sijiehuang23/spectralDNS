@@ -243,7 +243,7 @@ parser_Bq.add_argument('--Pr', default=1.0, type=float, help='Prandtl number')
 # Arguments for 2D periodic solvers
 doublyperiodic = argparse.ArgumentParser(parents=[parser])
 doublyperiodic.add_argument('--integrator', default='RK4',
-                            choices=('RK4', 'ForwardEuler', 'AB2', 'BS5_fixed', 'BS5_adaptive', 'stochasticRK3'),
+                            choices=('RK4', 'ForwardEuler', 'AB2', 'BS5_fixed', 'BS5_adaptive', 'stochasticRK3', 'predictor_corrector'),
                             help='Integrator for doubly periodic domain')
 doublyperiodic.add_argument('--L', default=[2.*pi, 2.*pi], nargs=2, metavar=('Lx', 'Ly'),
                             help='Physical mesh size')

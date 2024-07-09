@@ -160,10 +160,14 @@ def RK4(u0, u1, u2, rhs, a, b, dt, solver, context):
 
 @optimizer
 def stochasticRK3(u0, u1, rhs, a, b, wi, dt, solver, context):
-    """stochastic RK3 following Delong et al. (2013, PRE)"""
-    """Specific to the fluctuating NS equation"""
+    """stochastic RK3 following Delong et al. (2013, PRE)"
+    Specific to the fluctuating NS equation"""
+    u1 = u0.copy()
+    
+    W_A, W_B = solver.generate_noise(**context)
+        
     for rk in range(3):
-        rhs = solver.ComputeRHS(rhs, u0, solver, wi[rk], **context)
+        rhs = solver.ComputeRHS(rhs, u0, solver, W_A, W_B, wi[rk], **context)
         u0[:] = a[rk]*u1 + b[rk]*(u0 + dt*rhs)
     
     return u0, dt, dt
@@ -204,12 +208,20 @@ def getintegrator(rhs, u0, solver, context):
         assert params.solver=='OFNS2D' or params.solver=='OFNS3D', "stochasticRK3 is only implemented for OFNS2D and OFNS3D"
         a = np.array([0.0, 3.0/4.0, 1.0/3.0], dtype=context.float)
         b = np.array([1.0, 1.0/4.0, 2.0/3.0], dtype=context.float)
-        w_i = np.array([(8**0.5 + 3**0.5)/5, 
-                        (-32**0.5 + 27**0.5)/5,
-                        (2**0.5 - 12**0.5)/10], dtype=context.float)
+        w_i = np.array([(8**0.5 - 3**0.5)/5, 
+                        (-32**0.5 - 27**0.5)/5,
+                        (2**0.5 + 12**0.5)/10], dtype=context.float)
         @wraps(stochasticRK3)
         def func():
             return stochasticRK3(u0, u1, rhs, a, b, w_i, params.dt, solver, context)
+        return func
+    
+    elif params.integrator == 'predictor_corrector':
+        assert params.solver=='OFNS2D' or params.solver=='OFNS3D', "predictor-corrector is only implemented for OFNS2D and OFNS3D"
+        wi = np.array([0.0, 0.1], dtype=context.float)
+        @wraps(predictor_corrector)
+        def func():
+            return predictor_corrector(u0, u1, rhs, wi, params.dt, solver, context)
         return func
 
     elif params.integrator in ("BS5_adaptive", "BS5_fixed"):
@@ -259,3 +271,6 @@ def getintegrator(rhs, u0, solver, context):
         def func():
             return AB2(u0, u1, rhs, params.dt, params.tstep, solver, context)
         return func
+    
+    else:
+        raise NotImplementedError("Temporal integrator, %s, not implemented" % params.integrator)
