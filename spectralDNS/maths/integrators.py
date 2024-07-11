@@ -205,7 +205,7 @@ def getintegrator(rhs, u0, solver, context):
         return func
     
     elif params.integrator == 'stochasticRK3':
-        assert params.solver=='OFNS2D' or params.solver=='OFNS3D', "stochasticRK3 is only implemented for OFNS2D and OFNS3D"
+        assert params.solver=='FNS2D' or params.solver=='OFNS', "stochasticRK3 is only implemented for FNS2D and OFNS3D"
         a = np.array([0.0, 3.0/4.0, 1.0/3.0], dtype=context.float)
         b = np.array([1.0, 1.0/4.0, 2.0/3.0], dtype=context.float)
         w_i = np.array([(8**0.5 - 3**0.5)/5, 
@@ -216,13 +216,13 @@ def getintegrator(rhs, u0, solver, context):
             return stochasticRK3(u0, u1, rhs, a, b, w_i, params.dt, solver, context)
         return func
     
-    elif params.integrator == 'predictor_corrector':
-        assert params.solver=='OFNS2D' or params.solver=='OFNS3D', "predictor-corrector is only implemented for OFNS2D and OFNS3D"
-        wi = np.array([0.0, 0.1], dtype=context.float)
-        @wraps(predictor_corrector)
-        def func():
-            return predictor_corrector(u0, u1, rhs, wi, params.dt, solver, context)
-        return func
+    # elif params.integrator == 'predictor_corrector':
+    #     assert params.solver=='OFNS2D' or params.solver=='OFNS3D', "predictor-corrector is only implemented for OFNS2D and OFNS3D"
+    #     wi = np.array([0.0, 0.1], dtype=context.float)
+    #     @wraps(predictor_corrector)
+    #     def func():
+    #         return predictor_corrector(u0, u1, rhs, wi, params.dt, solver, context)
+    #     return func
 
     elif params.integrator in ("BS5_adaptive", "BS5_fixed"):
         # Remove nodepy dependency since it requires matplotlib and six

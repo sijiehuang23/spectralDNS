@@ -74,7 +74,7 @@ def get_context():
     dU = Function(VM)
     work = work_arrays()
     
-    hdf5file = OFNS2DFile(config.params.solver,
+    hdf5file = FNS2DFile(config.params.solver,
                       checkpoint={'space': VT,
                                   'data': {'0': {'Uc': [Uc_hat]}}},
                       results={'space': VT,
@@ -82,7 +82,7 @@ def get_context():
     
     return config.AttributeDict(locals())
 
-class OFNS2DFile(HDF5File):
+class FNS2DFile(HDF5File):
     def update_components(self, Uc, Uc_hat, **context):
         """Transform to real data before storing the solution"""
         # get_velocity(**context)
@@ -133,12 +133,6 @@ def add_thermal_fluctuation(rhs, W_A, W_B, wi, dt, dx, mag, w, w_hat, K, VW, **c
     # take divergence and add to rhs 
     rhs[0] += 1j*(K[0]*w_hat[0]+K[1]*w_hat[1])
     rhs[1] += 1j*(K[0]*w_hat[2]+K[1]*w_hat[3])
-    
-    return rhs
-
-def add_odd_viscous(rhs, uc_hat, K2, nu_odd, **context):
-    rhs[0] +=  nu_odd*K2*uc_hat[1]
-    rhs[1] += -nu_odd*K2*uc_hat[0]
     
     return rhs
 
@@ -202,9 +196,6 @@ def ComputeRHS(rhs, uc_hat, solver, W_A, W_B, wi, work, K, K2, K_over_K2, P_hat,
     
     # Compute nonlinear convection term 
     rhs = solver.conv(rhs, uc_hat, work, Tp, VMp, K, uc_dealias)
-    
-    # add odd viscous term
-    # rhs = solver.add_odd_viscous(rhs, uc_hat, K2, params.nu_odd)
     
     # add thermal fluctuation
     rhs = solver.add_thermal_fluctuation(rhs, W_A, W_B, wi, params.dt, params.dx, params.mag_thermal_fluctuation, W, W_hat, K, VW)
