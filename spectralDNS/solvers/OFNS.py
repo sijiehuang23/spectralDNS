@@ -56,6 +56,8 @@ def get_context():
     Uc_hat = Function(UT)
     P = Array(T)
     P_hat = Function(T)
+    C = Array(T)
+    C_hat = Function(T)
     uc_dealias = Array(UTp)
     W = Array(WT)
     W_hat = Function(WT)
@@ -75,7 +77,11 @@ def get_context():
                       checkpoint={'space': VT,
                                   'data': {'0': {'U': [Uc_hat]}}},
                       results={'space': VT,
-                               'data': {'Uc': [Uc], 'P': [P]}})
+                               'data': {'U': [Uc[0]], 
+                                        'V': [Uc[1]], 
+                                        'W': [Uc[2]], 
+                                        'C': [Uc[3]],
+                                        'P': [P]}})
 
     return config.AttributeDict(locals())
 
@@ -86,14 +92,20 @@ class OFNSFile(HDF5File):
     that are to be stored. If more variables than U and P are
     wanted, then subclass HDF5Writer in the application.
     """
-    def update_components(self, Uc, Uc_hat, **context):
+    def update_components(self, Uc, Uc_hat, P, P_hat, T, **context):
         """Transform to real data before storing the solution"""
         Uc = Uc_hat.backward(Uc)
+        P = get_pressure(P, P_hat, T)
 
 def get_velocity(U, Uc_hat, VT, **context):
     """Compute velocity from context"""
-    U = VT.backward(Uc_hat, U)
+    U = VT.backward(Uc_hat[:-1], U)
     return U
+
+def get_scalar(C, Uc_hat, T, **context):
+    """Compute scalar from context"""
+    C = T.backward(Uc_hat[-1], C)
+    return C
 
 def get_pressure(P, P_hat, T, **context):
     """Compute pressure from context"""
@@ -104,6 +116,11 @@ def set_velocity(U, Uc_hat, VT, **context):
     """Compute velocity from context"""
     Uc_hat[:-1] = VT.forward(U, Uc_hat[:-1])
     return Uc_hat
+
+def set_scalar(C, C_hat, T, **context):
+    """Compute scalar from context"""
+    C_hat = T.forward(C, C_hat)
+    return C_hat
 
 def get_divergence(T, K, Uc_hat, mask, **context):
     div_u = Array(T)

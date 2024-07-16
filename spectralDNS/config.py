@@ -241,8 +241,8 @@ parser_Bq.add_argument('--Ri', default=0.1, type=float, help='Richardson number'
 parser_Bq.add_argument('--Pr', default=1.0, type=float, help='Prandtl number')
 parser_OFNS = trippelsubparsers.add_parser('OFNS', help='Odd fluctuating Navier-Stokes equation')
 parser_OFNS.add_argument('--alpha', default=0.01, type=float, help='Mass diffusivity', nargs=1)
-parser_OFNS.add_argument('--mag_thermal_fluctuation', default=0.01, type=float, help='Magnitude of thermal fluctuation', nargs=1)
-parser_OFNS.add_argument('--nu_odd', default=1e-5, type=float, help='Odd viscosity', nargs=1)
+parser_OFNS.add_argument('--mag_thermal_fluctuation', default=0.0, type=float, help='Magnitude of thermal fluctuation', nargs=1)
+parser_OFNS.add_argument('--nu_odd', default=0.0, type=float, help='Odd viscosity', nargs=1)
 
 # Arguments for 2D periodic solvers
 doublyperiodic = argparse.ArgumentParser(parents=[parser])
