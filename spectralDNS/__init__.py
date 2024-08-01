@@ -14,7 +14,9 @@ import importlib
 import cProfile
 from . import config
 
-#pylint: disable=eval-used,unused-variable
+
+# pylint: disable=eval-used,unused-variable
+
 
 def get_solver(update=None,
                regression_test=None,
@@ -85,7 +87,7 @@ def solve(solver, context):
 
     solver.conv = solver.getConvection(params.convection)
 
-    integrate = solver.getintegrator(context.dU, # rhs array
+    integrate = solver.getintegrator(context.dU,  # rhs array
                                      context.u,  # primary variable
                                      solver,
                                      context)
@@ -95,7 +97,7 @@ def solve(solver, context):
     # write initial condition
     context.hdf5file.update(params, **context)
 
-    while params.t + params.dt <= params.T+1e-12:
+    while params.t + params.dt <= params.T + 1e-12:
 
         u, params.dt, dt_took = integrate()
 
@@ -107,12 +109,12 @@ def solve(solver, context):
         context.hdf5file.update(params, **context)
 
         solver.timer()
-        
+
         if solver.rank == 0 and params.tstep % params.checkinterval == 0:
             print(f"Step = {params.tstep:06d}, time = {params.t:8.4e}, dt = {params.dt:6.4e}")
 
         if not solver.profiler.getstats() and params.make_profile:
-            #Enable profiling after first step is finished
+            # Enable profiling after first step is finished
             solver.profiler.enable()
 
         if solver.end_of_tstep(context):
@@ -120,9 +122,9 @@ def solve(solver, context):
 
     params.dt = dt_in
     solver.timer.final(params.verbose)
-    
+
     # context.hdf5file.update(params, **context)
-    
+
     if params.make_profile:
         solver.results = solver.create_profile(solver.profiler)
 

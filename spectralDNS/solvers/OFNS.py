@@ -128,6 +128,13 @@ def get_divergence(T, K, Uc_hat, mask, **context):
     div_u = T.backward(div_Uc_hat, div_u)
     return div_u
 
+# def compute_curl(c, a, work, T, K):
+#     """c = curl(a) = F_inv(F(curl(a))) = F_inv(1j*K x a)"""
+#     curl_hat = work[(a, 0, False)]
+#     curl_hat = cross2(curl_hat, K, a)
+#     c = T.backward(curl_hat, c)
+#     return c
+
 def standard_convection(rhs, uc_dealias, Uc_hat, work, Tp, K):
     """rhs_i = u_j du_i/dx_j"""
     gradUi = work[(uc_dealias[:-1], 1, False)]
@@ -170,8 +177,8 @@ def getConvection(convection):
 
         def Conv(rhs, Uc_hat, work, Tp, UTp, K, uc_dealias):
             uc_dealias = UTp.backward(Uc_hat, uc_dealias)
-            rhs = standard_convection(rhs, uc_dealias, Uc_hat, work, Tp, K)
-            rhs[:] *= -1
+            rhs = -standard_convection(rhs, uc_dealias, Uc_hat, work, Tp, K)
+            
             return rhs
 
     elif convection == "Divergence":
@@ -214,8 +221,8 @@ def projection(rhs, K, P_hat, K_over_K2):
     return rhs
 
 def add_diffusion(rhs, Uc_hat, nu, alpha, K2):
-    rhs[:-1] -= nu*K2*Uc_hat[:-1]
-    rhs[-1]  -= alpha*K2*Uc_hat[-1]
+    rhs[:3] -= nu*K2*Uc_hat[:3]
+    rhs[3]  -= alpha*K2*Uc_hat[3]
     
     return rhs 
 
@@ -267,7 +274,7 @@ def ComputeRHS(rhs, uc_hat, solver, W_A, W_B, wi, work, K, K2, K_over_K2, P_hat,
         rhs.mask_nyquist(mask)
 
     # add thermal fluctuations
-    rhs = solver.add_thermal_fluctuation(rhs, W_A, W_B, wi, params.dt, params.dx, params.mag_thermal_fluctuation, W, W_hat, K, WT)
+    # rhs = solver.add_thermal_fluctuation(rhs, W_A, W_B, wi, params.dt, params.dx, params.mag_thermal_fluctuation, W, W_hat, K, WT)
 
     # projection
     rhs = solver.projection(rhs, K, P_hat, K_over_K2)

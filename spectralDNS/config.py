@@ -49,9 +49,11 @@ import argparse
 from collections.abc import MutableMapping
 from collections import defaultdict
 import json
+import numpy as np
 from numpy import pi, array, float32, float64
 
-#pylint: disable=global-statement,redefined-outer-name,exec-used
+# pylint: disable=global-statement,redefined-outer-name,exec-used
+
 
 class AttributeDict(MutableMapping, dict):
     """Dictionary class
@@ -64,6 +66,7 @@ class AttributeDict(MutableMapping, dict):
         assert M is N
 
     """
+
     def __init__(self, *args, **kwargs):
         super(AttributeDict, self).__init__(*args, **kwargs)
         self.__dict__ = self
@@ -104,6 +107,7 @@ class Params(AttributeDict):
         assert M is N
 
     """
+
     def __init__(self, *args, **kwargs):
         AttributeDict.__init__(self, *args, **kwargs)
 
@@ -147,15 +151,19 @@ class Params(AttributeDict):
         else:
             dict.__setitem__(self, key, val)
 
+
 fft_plans = defaultdict(lambda: "FFTW_MEASURE",
                         {'dct': "FFTW_MEASURE"})
 
+
 class PlanAction(argparse.Action):
     """Action for planning FFT"""
+
     def __call__(self, parser, namespace, values, option_string=None):
         global fft_plans
         fft_plans.update(json.loads(values))
         setattr(namespace, self.dest, fft_plans)
+
 
 # Create an instance of the Params class to hold all parameters for the solvers
 params = Params()
@@ -190,7 +198,7 @@ parser.add_argument('--tstep', default=0, type=int,
 parser.add_argument('--filemode', default='w',
                     choices=('w', 'r', 'a'),
                     help='Choose mode for opening HDF5 files')
-parser.add_argument('--dealias', default='2/3-rule',
+parser.add_argument('--dealias', default='3/2-rule',
                     choices=('2/3-rule', '3/2-rule', 'None'),
                     help='Choose dealiasing method')
 parser.add_argument('--decomposition', default='slab', choices=('slab', 'pencil'),
@@ -203,20 +211,25 @@ parser.add_argument('--planner_effort', action=PlanAction, default=fft_plans,
                     help="""Planning effort for FFTs. Usage, e.g., --planner_effort '{"dct":"FFTW_EXHAUSTIVE"}' """)
 parser.add_argument('--h5filename', default='results', type=str,
                     help='Filename of HDF5 datafile used to store intermediate checkpoint data or timeseries results')
-parser.add_argument('--verbose', dest='verbose', action='store_true', help='Print timings in the end')
-parser.add_argument('--no-verbose', dest='verbose', action='store_false', help='Do not print timings in the end')
+parser.add_argument('--verbose', dest='verbose',
+                    action='store_true', help='Print timings in the end')
+parser.add_argument('--no-verbose', dest='verbose',
+                    action='store_false', help='Do not print timings in the end')
 parser.set_defaults(verbose=True)
-parser.add_argument('--mask_nyquist', dest='mask_nyquist', action='store_true', help='Eliminate Nyquist frequency')
-parser.add_argument('--no-mask_nyquist', dest='mask_nyquist', action='store_false', help='Do not eliminate Nyquist frequency')
+parser.add_argument('--mask_nyquist', dest='mask_nyquist',
+                    action='store_true', help='Eliminate Nyquist frequency')
+parser.add_argument('--no-mask_nyquist', dest='mask_nyquist',
+                    action='store_false', help='Do not eliminate Nyquist frequency')
 parser.set_defaults(mask_nyquist=True)
 
 # Arguments for 3D isotropic solvers
 triplyperiodic = argparse.ArgumentParser(parents=[parser])
 
 triplyperiodic.add_argument('--convection', default='Vortex',
-                            choices=('Standard', 'Divergence', 'Skewed', 'Vortex'),
+                            choices=('Standard', 'Divergence',
+                                     'Skewed', 'Vortex'),
                             help='Choose method for computing the nonlinear convective term')
-triplyperiodic.add_argument('--L', default=[2.*pi, 2.*pi, 2.*pi], metavar=("Lx", "Ly", "Lz"), nargs=3,
+triplyperiodic.add_argument('--L', default=[2. * pi, 2. * pi, 2. * pi], metavar=("Lx", "Ly", "Lz"), nargs=3,
                             help='Physical mesh size')
 
 triplyperiodic.add_argument('--M', default=[6, 6, 6], metavar=("Mx", "My", "Mz"), nargs=3,
@@ -224,7 +237,8 @@ triplyperiodic.add_argument('--M', default=[6, 6, 6], metavar=("Mx", "My", "Mz")
 triplyperiodic.add_argument('--TOL', type=float, default=1e-6,
                             help='Tolerance for adaptive time integrator')
 triplyperiodic.add_argument('--integrator', default='RK4',
-                            choices=('RK4', 'ForwardEuler', 'AB2', 'BS5_adaptive', 'BS5_fixed', 'stochasticRK3'),
+                            choices=('RK4', 'ForwardEuler', 'AB2',
+                                     'BS5_adaptive', 'BS5_fixed', 'stochasticRK3'),
                             help='Integrator for triply periodic domain')
 
 trippelsubparsers = triplyperiodic.add_subparsers(dest='solver')
@@ -232,24 +246,35 @@ trippelsubparsers = triplyperiodic.add_subparsers(dest='solver')
 # Remember! Subparser arguments must be invoked after the positional argument
 # E.g, python TG.py --M 6 6 6 NS --integrator RK4
 
-parser_NS = trippelsubparsers.add_parser('NS', help='Regular Navier Stokes solver')
-parser_VV = trippelsubparsers.add_parser('VV', help='Velocity-Vorticity formulation')
-parser_MHD = trippelsubparsers.add_parser('MHD', help='Magnetohydrodynamics solver')
-parser_MHD.add_argument('--eta', default=0.01, type=float, help='MHD parameter')
-parser_Bq = trippelsubparsers.add_parser('Bq', help='Navier Stokes solver with Boussinesq model')
-parser_Bq.add_argument('--Ri', default=0.1, type=float, help='Richardson number')
+parser_NS = trippelsubparsers.add_parser(
+    'NS', help='Regular Navier Stokes solver')
+parser_VV = trippelsubparsers.add_parser(
+    'VV', help='Velocity-Vorticity formulation')
+parser_MHD = trippelsubparsers.add_parser(
+    'MHD', help='Magnetohydrodynamics solver')
+parser_MHD.add_argument('--eta', default=0.01,
+                        type=float, help='MHD parameter')
+parser_Bq = trippelsubparsers.add_parser(
+    'Bq', help='Navier Stokes solver with Boussinesq model')
+parser_Bq.add_argument('--Ri', default=0.1, type=float,
+                       help='Richardson number')
 parser_Bq.add_argument('--Pr', default=1.0, type=float, help='Prandtl number')
-parser_OFNS = trippelsubparsers.add_parser('OFNS', help='Odd fluctuating Navier-Stokes equation')
-parser_OFNS.add_argument('--alpha', default=0.01, type=float, help='Mass diffusivity', nargs=1)
-parser_OFNS.add_argument('--mag_thermal_fluctuation', default=0.0, type=float, help='Magnitude of thermal fluctuation', nargs=1)
-parser_OFNS.add_argument('--nu_odd', default=0.0, type=float, help='Odd viscosity', nargs=1)
+parser_OFNS = trippelsubparsers.add_parser(
+    'OFNS', help='Odd fluctuating Navier-Stokes equation')
+parser_OFNS.add_argument('--alpha', default=0.0,
+                         type=float, help='Mass diffusivity', nargs=1)
+parser_OFNS.add_argument('--mag_thermal_fluctuation', default=0.0,
+                         type=float, help='Magnitude of thermal fluctuation', nargs=1)
+parser_OFNS.add_argument('--nu_odd', default=0.0,
+                         type=float, help='Odd viscosity', nargs=1)
 
 # Arguments for 2D periodic solvers
 doublyperiodic = argparse.ArgumentParser(parents=[parser])
 doublyperiodic.add_argument('--integrator', default='RK4',
-                            choices=('RK4', 'ForwardEuler', 'AB2', 'BS5_fixed', 'BS5_adaptive', 'stochasticRK3', 'predictor_corrector'),
+                            choices=('RK4', 'ForwardEuler', 'AB2', 'BS5_fixed',
+                                     'BS5_adaptive', 'stochasticRK3', 'predictor_corrector'),
                             help='Integrator for doubly periodic domain')
-doublyperiodic.add_argument('--L', default=[2.*pi, 2.*pi], nargs=2, metavar=('Lx', 'Ly'),
+doublyperiodic.add_argument('--L', default=[2. * pi, 2. * pi], nargs=2, metavar=('Lx', 'Ly'),
                             help='Physical mesh size')
 doublyperiodic.add_argument('--convection', default='Vortex',
                             choices=('Vortex'),
@@ -261,22 +286,33 @@ doublyperiodic.add_argument('--M', default=[6, 6], nargs=2, metavar=('Mx', 'My')
 
 doublesubparsers = doublyperiodic.add_subparsers(dest='solver')
 
-parser_NS2D = doublesubparsers.add_parser('NS2D', help='Regular 2D Navier Stokes solver')
-parser_Bq2D = doublesubparsers.add_parser('Bq2D', help='Regular 2D Navier Stokes solver with Boussinesq model.')
-parser_AD2D = doublesubparsers.add_parser('AD2D', help='2D Advection-Diffusion solver with constant advection velocity')
-parser_FNS2D = doublesubparsers.add_parser('FNS2D', help='2D fluctuating Navier Stokes solver')
-parser_Bq2D.add_argument('--Ri', default=0.1, type=float, help='Richardson number')
-parser_Bq2D.add_argument('--Pr', default=1.0, type=float, help='Prandtl number')
-parser_AD2D.add_argument('--advection_velocity', default=[1.0, 0.0], type=float, help='Advection velocity', nargs=2)
-parser_FNS2D.add_argument('--alpha', default=0.01, type=float, help='Mass diffusivity', nargs=1)
-parser_FNS2D.add_argument('--mag_thermal_fluctuation', default=0.01, type=float, help='Magnitude of thermal fluctuation', nargs=1)
+parser_NS2D = doublesubparsers.add_parser(
+    'NS2D', help='Regular 2D Navier Stokes solver')
+parser_Bq2D = doublesubparsers.add_parser(
+    'Bq2D', help='Regular 2D Navier Stokes solver with Boussinesq model.')
+parser_AD2D = doublesubparsers.add_parser(
+    'AD2D', help='2D Advection-Diffusion solver with constant advection velocity')
+parser_FNS2D = doublesubparsers.add_parser(
+    'FNS2D', help='2D fluctuating Navier Stokes solver')
+parser_Bq2D.add_argument(
+    '--Ri', default=0.1, type=float, help='Richardson number')
+parser_Bq2D.add_argument(
+    '--Pr', default=1.0, type=float, help='Prandtl number')
+parser_AD2D.add_argument('--advection_velocity',
+                         default=[1.0, 0.0], type=float, help='Advection velocity', nargs=2)
+parser_FNS2D.add_argument('--alpha', default=0.01,
+                          type=float, help='Mass diffusivity', nargs=1)
+parser_FNS2D.add_argument('--filter_length', default=[1e12, 1e12],
+                          type=float, help='Characteristic length scale for spatial filter', nargs=2)
+parser_FNS2D.add_argument('--fluctuation_magnitude', default=0.01,
+                          type=float, help='Magnitude of fluctuation', nargs=1)
 
 # Arguments for channel solvers with one inhomogeneous direction
 channel = argparse.ArgumentParser(parents=[parser])
 channel.add_argument('--convection', default='Vortex',
                      choices=('Standard', 'Divergence', 'Skew', 'Vortex'),
                      help='Choose method for computing the nonlinear convective term')
-channel.add_argument('--L', default=[2, 2*pi, 2*pi], nargs=3, metavar=('Lx', 'Ly', 'Lz'),
+channel.add_argument('--L', default=[2, 2 * pi, 2 * pi], nargs=3, metavar=('Lx', 'Ly', 'Lz'),
                      help='Physical mesh size')
 channel.add_argument('--M', default=[6, 6, 6], nargs=3, metavar=('Mx', 'My', 'Mz'),
                      help='Mesh size is pow(2, M[i]) in direction i. Used if N is missing.')
@@ -288,32 +324,47 @@ channel.add_argument('--Nquad', default='GC', choices=('GC', 'GL'),
                      help="Choose quadrature scheme for Neumann space. GC = Chebyshev-Gauss (x_k=cos((2k+1)/(2N+2)*pi)) and GL = Gauss-Lobatto (x_k=cos(k*pi/N))")
 channelsubparsers = channel.add_subparsers(dest='solver')
 
-KMM = channelsubparsers.add_parser('KMM', help='Kim Moin Moser channel solver with Crank-Nicolson and Adams-Bashforth discretization.')
-KMM.add_argument('--integrator', default='implicit', choices=('implicit',), help='Regular Crank-Nicolson/Adams-Bashforth integrator for channel solver')
+KMM = channelsubparsers.add_parser(
+    'KMM', help='Kim Moin Moser channel solver with Crank-Nicolson and Adams-Bashforth discretization.')
+KMM.add_argument('--integrator', default='implicit', choices=('implicit',),
+                 help='Regular Crank-Nicolson/Adams-Bashforth integrator for channel solver')
 
-KMMr = channelsubparsers.add_parser('KMMr', help='Kim Moin Moser channel solver with Crank-Nicolson and Adams-Bashforth discretization. Inhomogeneous space in z-direction.')
-KMMr.add_argument('--integrator', default='implicit', choices=('implicit',), help='Regular Crank-Nicolson/Adams-Bashforth integrator for channel solver')
+KMMr = channelsubparsers.add_parser(
+    'KMMr', help='Kim Moin Moser channel solver with Crank-Nicolson and Adams-Bashforth discretization. Inhomogeneous space in z-direction.')
+KMMr.add_argument('--integrator', default='implicit', choices=('implicit',),
+                  help='Regular Crank-Nicolson/Adams-Bashforth integrator for channel solver')
 
-KMMRK3 = channelsubparsers.add_parser('KMMRK3', help='Kim Moin Moser channel solver with third order semi-implicit Runge-Kutta discretization.')
-KMMRK3.add_argument('--integrator', default='implicitRK3', choices=('implicitRK3',), help='RK3 integrator for channel solver')
+KMMRK3 = channelsubparsers.add_parser(
+    'KMMRK3', help='Kim Moin Moser channel solver with third order semi-implicit Runge-Kutta discretization.')
+KMMRK3.add_argument('--integrator', default='implicitRK3',
+                    choices=('implicitRK3',), help='RK3 integrator for channel solver')
 
-KMM_RB = channelsubparsers.add_parser('KMM_RB', help='Rayleigh-Benard channel solver using KMM')
-KMM_RB.add_argument('--integrator', default='implicit', choices=('implicit',), help='Regular Crank-Nicolson/Adams-Bashforth integrator for channel solver')
+KMM_RB = channelsubparsers.add_parser(
+    'KMM_RB', help='Rayleigh-Benard channel solver using KMM')
+KMM_RB.add_argument('--integrator', default='implicit', choices=('implicit',),
+                    help='Regular Crank-Nicolson/Adams-Bashforth integrator for channel solver')
 
-KMMRK3_RB = channelsubparsers.add_parser('KMMRK3_RB', help='Rayleigh-Benard channel solver using KMMRK3.')
-KMMRK3_RB.add_argument('--integrator', default='implicitRK3', choices=('implicitRK3',), help='RK3 integrator for channel solver')
+KMMRK3_RB = channelsubparsers.add_parser(
+    'KMMRK3_RB', help='Rayleigh-Benard channel solver using KMMRK3.')
+KMMRK3_RB.add_argument('--integrator', default='implicitRK3',
+                       choices=('implicitRK3',), help='RK3 integrator for channel solver')
 
-#IPCS = channelsubparsers.add_parser('IPCS', help='Incremental pressure correction channel solver with Crank-Nicolson and Adams-Bashforth discretization.')
-#IPCS.add_argument('--integrator', default='implicit', choices=('implicit',), help='Regular Crank-Nicolson/Adams-Bashforth integrator for channel solver')
+# IPCS = channelsubparsers.add_parser('IPCS', help='Incremental pressure correction channel solver with Crank-Nicolson and Adams-Bashforth discretization.')
+# IPCS.add_argument('--integrator', default='implicit', choices=('implicit',), help='Regular Crank-Nicolson/Adams-Bashforth integrator for channel solver')
 
-#IPCSR = channelsubparsers.add_parser('IPCSR', help='Incremental pressure correction channel solver with Crank-Nicolson and Adams-Bashforth discretization.')
-#IPCSR.add_argument('--integrator', default='implicit', choices=('implicit',), help='Regular Crank-Nicolson/Adams-Bashforth integrator for channel solver')
+# IPCSR = channelsubparsers.add_parser('IPCSR', help='Incremental pressure correction channel solver with Crank-Nicolson and Adams-Bashforth discretization.')
+# IPCSR.add_argument('--integrator', default='implicit', choices=('implicit',), help='Regular Crank-Nicolson/Adams-Bashforth integrator for channel solver')
 
-Coupled = channelsubparsers.add_parser('Coupled', help='Coupled channel solver with Crank-Nicolson and Adams-Bashforth discretization.')
-Coupled.add_argument('--integrator', default='implicit', choices=('implicit',), help='Regular Crank-Nicolson/Adams-Bashforth integrator for channel solver')
+Coupled = channelsubparsers.add_parser(
+    'Coupled', help='Coupled channel solver with Crank-Nicolson and Adams-Bashforth discretization.')
+Coupled.add_argument('--integrator', default='implicit', choices=('implicit',),
+                     help='Regular Crank-Nicolson/Adams-Bashforth integrator for channel solver')
 
-CoupledRK3 = channelsubparsers.add_parser('CoupledRK3', help='Coupled channel solver with RK3.')
-CoupledRK3.add_argument('--integrator', default='implicit', choices=('implicit',), help='Coupled RK3 integrator for channel solver')
+CoupledRK3 = channelsubparsers.add_parser(
+    'CoupledRK3', help='Coupled channel solver with RK3.')
+CoupledRK3.add_argument('--integrator', default='implicit', choices=(
+    'implicit',), help='Coupled RK3 integrator for channel solver')
+
 
 def update(new, mesh="triplyperiodic"):
     """Update spectralDNS parameters"""
