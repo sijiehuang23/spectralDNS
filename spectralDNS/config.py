@@ -220,7 +220,7 @@ parser.add_argument('--mask_nyquist', dest='mask_nyquist',
                     action='store_true', help='Eliminate Nyquist frequency')
 parser.add_argument('--no-mask_nyquist', dest='mask_nyquist',
                     action='store_false', help='Do not eliminate Nyquist frequency')
-parser.set_defaults(mask_nyquist=True)
+parser.set_defaults(mask_nyquist=False)
 
 # Arguments for 3D isotropic solvers
 triplyperiodic = argparse.ArgumentParser(parents=[parser])
@@ -302,10 +302,12 @@ parser_AD2D.add_argument('--advection_velocity',
                          default=[1.0, 0.0], type=float, help='Advection velocity', nargs=2)
 parser_FNS2D.add_argument('--alpha', default=0.01,
                           type=float, help='Mass diffusivity', nargs=1)
-parser_FNS2D.add_argument('--filter_length', default=[1e12, 1e12],
+parser_FNS2D.add_argument('--filter_length', default=[0, 0],
                           type=float, help='Characteristic length scale for spatial filter', nargs=2)
-parser_FNS2D.add_argument('--fluctuation_magnitude', default=0.01,
-                          type=float, help='Magnitude of fluctuation', nargs=1)
+parser_FNS2D.add_argument('--D', default=0.0,
+                          type=float, help='Magnitude of external fluctuation', nargs=1)
+parser_FNS2D.add_argument('--temperature', default=30.0,
+                          type=float, help='Temperature', nargs=1)
 
 # Arguments for channel solvers with one inhomogeneous direction
 channel = argparse.ArgumentParser(parents=[parser])
