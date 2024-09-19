@@ -167,11 +167,32 @@ def stochasticRK3(u0, u1, rhs, a, b, wi, dt, solver, context):
     Specific to the fluctuating NS equation"""
     u1 = u0.copy()
 
-    W_A, W_B = solver.generate_noise(**context)
+    N = solver.params.N
+    W_A, W_B = solver.generate_noise(N, **context)
 
     for rk in range(3):
-        rhs = solver.ComputeRHS(rhs, u0, solver, W_A, W_B, wi[rk], **context)
+        rhs = solver.ComputeRHS(rhs, u0, solver, W_A, W_B, wi[rk], solver.params.D / dt**0.5, **context)
         u0[:] = a[rk] * u1 + b[rk] * (u0 + dt * rhs)
+
+    return u0, dt, dt
+
+
+def implicit_predictor_corrector(u0, u1, rhs, dt, solver, context):
+    """Implicit predictor corrector method"""
+    L_inv = 1 / (1 - 0.5 * dt * context.linear_operator)
+
+    N = solver.params.N
+    W_A, W_B = solver.generate_noise(N, **context)
+
+    D = solver.params.D
+    # predictor step
+    u1[:] = L_inv * (u0
+                     + 0.5 * dt * solver.ComputeRHS(rhs, u0, solver, W_A, W_B, 0, D * (0.5 * dt)**(-0.5), **context))
+
+    # corrector step
+    u0[:] = L_inv * (u0
+                     + 0.5 * dt * context.linear_operator * u0
+                     + dt * solver.ComputeRHS(rhs, u1, solver, W_A, W_B, 1, D * (2 * dt)**(-0.5), **context))
 
     return u0, dt, dt
 
@@ -195,8 +216,7 @@ def AB2(u0, u1, rhs, dt, tstep, solver, context):
 
 
 def getintegrator(rhs, u0, solver, context):
-    """Return integrator using choice in global parameter integrator.
-    """
+    """Return integrator using choice in global parameter integrator."""
     params = solver.params
     u1 = u0.copy()
 
@@ -222,6 +242,14 @@ def getintegrator(rhs, u0, solver, context):
         @wraps(stochasticRK3)
         def func():
             return stochasticRK3(u0, u1, rhs, a, b, w_i, params.dt, solver, context)
+        return func
+
+    elif params.integrator == 'implicitPC':
+        assert params.solver == 'FNS2D' or params.solver == 'OFNS' or params.solver == 'FS2D', "implicitPC is only implemented for FS2D, FNS2D and OFNS3D"
+
+        @wraps(implicit_predictor_corrector)
+        def func():
+            return implicit_predictor_corrector(u0, u1, rhs, params.dt, solver, context)
         return func
 
     elif params.integrator in ("BS5_adaptive", "BS5_fixed"):

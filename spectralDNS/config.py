@@ -272,7 +272,7 @@ parser_OFNS.add_argument('--nu_odd', default=0.0,
 doublyperiodic = argparse.ArgumentParser(parents=[parser])
 doublyperiodic.add_argument('--integrator', default='RK4',
                             choices=('RK4', 'ForwardEuler', 'AB2', 'BS5_fixed',
-                                     'BS5_adaptive', 'stochasticRK3', 'predictor_corrector'),
+                                     'BS5_adaptive', 'stochasticRK3', 'implicitPC'),
                             help='Integrator for doubly periodic domain')
 doublyperiodic.add_argument('--L', default=[2. * pi, 2. * pi], nargs=2, metavar=('Lx', 'Ly'),
                             help='Physical mesh size')
@@ -294,6 +294,8 @@ parser_AD2D = doublesubparsers.add_parser(
     'AD2D', help='2D Advection-Diffusion solver with constant advection velocity')
 parser_FNS2D = doublesubparsers.add_parser(
     'FNS2D', help='2D fluctuating Navier Stokes solver')
+parser_FS2D = doublesubparsers.add_parser(
+    'FS2D', help='2D fluctuating Stokes solver')
 parser_Bq2D.add_argument(
     '--Ri', default=0.1, type=float, help='Richardson number')
 parser_Bq2D.add_argument(
@@ -308,6 +310,14 @@ parser_FNS2D.add_argument('--D', default=0.0,
                           type=float, help='Magnitude of external fluctuation', nargs=1)
 parser_FNS2D.add_argument('--temperature', default=30.0,
                           type=float, help='Temperature', nargs=1)
+parser_FS2D.add_argument('--noise_type', default='thermal', choices=('thermal', 'correlated'),
+                         type=str, help='Noise type; either thermal or correlated', nargs=1)
+parser_FS2D.add_argument('--filter_length', default=[0, 0],
+                         type=float, help='Characteristic length scale for spatial filter', nargs=2)
+parser_FS2D.add_argument('--D', default=0.0,
+                         type=float, help='Magnitude of external fluctuation', nargs=1)
+parser_FS2D.add_argument('--temperature', default=30.0,
+                         type=float, help='Temperature', nargs=1)
 
 # Arguments for channel solvers with one inhomogeneous direction
 channel = argparse.ArgumentParser(parents=[parser])

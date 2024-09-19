@@ -13,7 +13,7 @@ from .NS import end_of_tstep
 
 
 def get_context():
-    """Set up context for 2D fluctuating Navier-Stokes solver (FNS)"""
+    """Set up context for 2D flUtuating Stokes solver (FS)"""
     float, complex, mpitype = datatypes(params.precision)
     collapse_fourier = False if params.dealias == '3/2-rule' else True
     dim = len(params.N)
@@ -27,7 +27,6 @@ def get_context():
                            slab=(params.decomposition == 'slab'),
                            collapse_fourier=collapse_fourier, **kw0)
     VT = VectorSpace(T)
-    VM = CompositeSpace([T] * (dim + 1))
     VW = CompositeSpace([T] * (dim**2))
 
     mask = T.get_mask_nyquist() if params.mask_nyquist else None
@@ -36,7 +35,6 @@ def get_context():
           'dealias_direct': params.dealias == '2/3-rule'}
     Tp = T.get_dealiased(**kw)
     VTp = VectorSpace(Tp)
-    VMp = CompositeSpace([Tp] * (dim + 1))
 
     # Mesh variables
     X = T.local_mesh(True)
@@ -55,62 +53,52 @@ def get_context():
     linear_operator = -params.nu * K2
 
     # Solution variables
-    Uc = Array(VM)
-    Uc_hat = Function(VM)
+    U = Array(VT)
+    U_hat = Function(VT)
     P = Array(T)
     P_hat = Function(T)
     curl = Array(T)
-    uc_dealias = Array(VMp)
-    # W = Array(VW)
-    # W_hat = Function(VW)
-    W = Array(VT)
-    W_hat = Function(VT)
+    u_dealias = Array(VTp)
 
-    nu_hat = Function(T)
-    # alpha_hat = Function(T)
+    if params.noise_type == 'thermal':
+        W = Array(VW)
+        W_hat = Function(VW)
+    elif params.noise_type == 'correlated':
+        W = Array(VT)
+        W_hat = Function(VT)
 
     G = Array(T)
     G_hat = Function(T)
-
-    # Create views into large data structures
-    C = Uc[2]
-    C_hat = Uc_hat[2]
-    U = Uc[:2]
-    U_hat = Uc_hat[:2]
+    nu_hat = Function(T)
 
     # Primary variable
-    u = Uc_hat
+    u = U_hat
 
     # RHS and work arrays
-    dU = Function(VM)
+    dU = Function(VT)
     work = work_arrays()
 
     hdf5file = FNS2DFile(
         config.params.solver,
         checkpoint={'space': VT,
-                    'data': {'0': {'Uc': [Uc_hat]}}},
+                    'data': {'0': {'U': [U_hat]}}},
         results={'space': VT,
-                 'data': {'U': [Uc[0]],
-                          'V': [Uc[1]]}}
+                 'data': {'U': [U[0]],
+                          'V': [U[1]]}}
     )
 
     return config.AttributeDict(locals())
 
 
 class FNS2DFile(HDF5File):
-    def update_components(self, Uc, Uc_hat, W, W_hat, **context):
-        Uc = Uc_hat.backward(Uc)
+    def update_components(self, U, U_hat, W, W_hat, **context):
+        U = U_hat.backward(U)
         W = W_hat.backward(W)
 
 
 def get_velocity(U, U_hat, VT, **context):
     U = VT.backward(U_hat, U)
     return U
-
-
-def get_scalar(C, Uc_hat, T, **context):
-    C = T.backward(Uc_hat[2], C)
-    return C
 
 
 def get_pressure(P, P_hat, T, **context):
@@ -124,12 +112,6 @@ def set_velocity(U, U_hat, VT, **context):
     return U_hat
 
 
-def set_scalar(C, C_hat, T, **context):
-    """Compute velocity from context"""
-    C_hat = T.forward(C, C_hat)
-    return C_hat
-
-
 def generate_noise(N, W_hat, K2, **context):
     shape = W_hat.shape
     W_A = np.random.randn(*shape) + 1j * np.random.randn(*shape)
@@ -139,14 +121,8 @@ def generate_noise(N, W_hat, K2, **context):
     W_B /= np.prod(N)**0.5
 
     for i in range(2):
-        # W_A[i, :, 0] *= 2**0.5
-        # W_B[i, :, 0] *= 2**0.5
         W_A[i] *= np.where(K2 == 0, 0, 1)
         W_B[i] *= np.where(K2 == 0, 0, 1)
-
-    # scale_factor = np.sqrt(0.5)
-    # W_A *= scale_factor
-    # W_B *= scale_factor
 
     return W_A, W_B
 
@@ -162,8 +138,8 @@ def add_thermal_fluctuation(rhs, W_A, W_B, wi, mag, w_hat, K, **context):
     w_hat *= 0.5**0.5
 
     # take divergence and add to rhs
-    rhs[0] += 1j * (K[0] * w_hat[0] + K[1] * w_hat[1]) * mag
-    rhs[1] += 1j * (K[0] * w_hat[2] + K[1] * w_hat[3]) * mag
+    rhs[0] = 1j * (K[0] * w_hat[0] + K[1] * w_hat[1]) * mag
+    rhs[1] = 1j * (K[0] * w_hat[2] + K[1] * w_hat[3]) * mag
 
     return rhs
 
@@ -176,8 +152,8 @@ def add_correlated_noise(rhs, W_A, W_B, wi, mag, w_hat, G_hat, **context):
     w_hat[1] *= G_hat
 
     # add to rhs
-    rhs[0] += w_hat[0] * mag
-    rhs[1] += w_hat[1] * mag
+    rhs[0] = w_hat[0] * mag
+    rhs[1] = w_hat[1] * mag
 
     return rhs
 
@@ -189,28 +165,18 @@ def getConvection(convection):
 
     elif convection == "Vortex":
 
-        def Conv(rhs, uc_hat, work, Tp, VMp, K, uc_dealias):
-            uc_dealias = VMp.backward(uc_hat, uc_dealias)
-            u_dealias = uc_dealias[:2]
-            c_dealias = uc_dealias[2]
+        def Conv(rhs, U_hat, work, Tp, K, u_dealias):
 
             # momentum equation
             curl_dealias = work[(u_dealias[0], 0, True)]
             curl_hat = work[(rhs[0], 0, True)]
 
-            # curl_hat = cross2(curl_hat, K, uc_hat[:2])
-            curl_hat = 1j * (K[0] * uc_hat[1] - K[1] * uc_hat[0])
+            # curl_hat = cross2(curl_hat, K, u_hat[:2])
+            curl_hat = 1j * (K[0] * U_hat[1] - K[1] * U_hat[0])
             curl_dealias = Tp.backward(curl_hat, curl_dealias)
 
             rhs[0] = Tp.forward(u_dealias[1] * curl_dealias, rhs[0])
             rhs[1] = Tp.forward(-u_dealias[0] * curl_dealias, rhs[1])
-
-            # scalar equation
-            gradUC_hat = work[(uc_hat[:2], 0, True)]
-            for i in range(2):
-                gradUC_hat[i] = Tp.forward(u_dealias[i] * c_dealias, gradUC_hat[i])
-
-            rhs[2] = -1j * (K[0] * gradUC_hat[0] + K[1] * gradUC_hat[1])
 
             return rhs
 
@@ -221,32 +187,30 @@ def getConvection(convection):
 @optimizer
 def projection(rhs, P_hat, K_over_K2, K):
     # Compute Leray projection
-    P_hat = np.sum(rhs[:2] * K_over_K2, 0, out=P_hat)
+    P_hat = np.sum(rhs * K_over_K2, 0, out=P_hat)
 
     # Add pressure gradient
-    for i in range(rhs.shape[0] - 1):
+    for i in range(rhs.shape[0]):
         rhs[i] -= P_hat * K[i]
 
     return rhs
 
 
-def add_diffusion(rhs, uc_hat, K2, nu, alpha, **context):
-    rhs[0] -= nu * K2 * uc_hat[0]
-    rhs[1] -= nu * K2 * uc_hat[1]
-    rhs[2] -= alpha * K2 * uc_hat[2]
+def add_diffusion(rhs, u_hat, K2, nu, **context):
+    rhs[0] -= nu * K2 * u_hat[0]
+    rhs[1] -= nu * K2 * u_hat[1]
 
     return rhs
 
 
-def ComputeRHS(rhs, uc_hat, solver, W_A, W_B, wi, mag, work, K, K2, K_over_K2, P_hat, T, Tp,
-               VT, VMp, VW, uc_dealias, mask, W_hat, G_hat, nu_hat, **context):
-
-    # Compute nonlinear convection term
-    rhs = solver.conv(rhs, uc_hat, work, Tp, VMp, K, uc_dealias)
+def ComputeRHS(rhs, u_hat, solver, W_A, W_B, wi, mag, work, K, K2, K_over_K2, P_hat, T, Tp,
+               VT, VW, u_dealias, mask, W_hat, G_hat, nu_hat, **context):
 
     # add thermal fluctuation
-    # rhs = solver.add_thermal_fluctuation(rhs, W_A, W_B, wi, mag, W_hat, K)
-    rhs = solver.add_correlated_noise(rhs, W_A, W_B, wi, mag, W_hat, G_hat, **context)
+    if params.noise_type == 'thermal':
+        rhs = solver.add_thermal_fluctuation(rhs, W_A, W_B, wi, mag, W_hat, K)
+    elif params.noise_type == 'correlated':
+        rhs = solver.add_correlated_noise(rhs, W_A, W_B, wi, mag, W_hat, G_hat, **context)
 
     if mask is not None:
         rhs.mask_nyquist(mask)
@@ -256,7 +220,9 @@ def ComputeRHS(rhs, uc_hat, solver, W_A, W_B, wi, mag, work, K, K2, K_over_K2, P
 
     # add diffusion
     if params.integrator.casefold() != 'implicitPC'.casefold():
-        # rhs = solver.add_diffusion(rhs, uc_hat, K2, params.nu, params.alpha)
-        rhs = solver.add_diffusion(rhs, uc_hat, K2, nu_hat, params.alpha)
+        if params.noise_type == 'thermal':
+            rhs = solver.add_diffusion(rhs, u_hat, K2, params.nu)
+        elif params.noise_type == 'correlated':
+            rhs = solver.add_diffusion(rhs, u_hat, K2, nu_hat)
 
     return rhs
