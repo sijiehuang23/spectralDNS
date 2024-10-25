@@ -7,7 +7,8 @@ import importlib
 from functools import wraps
 from spectralDNS import config
 
-#pylint: disable=bare-except,no-member
+# pylint: disable=bare-except,no-member
+
 
 def optimizer(func):
     """Decorator used to wrap calls to optimized versions of functions.
@@ -22,37 +23,39 @@ def optimizer(func):
 
     """
 
-    try: # Look for optimized version of function
+    try:  # Look for optimized version of function
         mod = globals()["_".join((config.params.optimization,
                                   config.params.precision))]
 
         # Check for generic implementation first, then solver specific
         name = func.__name__
         if len(config.params.N) == 2:
-            fun = getattr(mod, name+"_2D", None)
+            fun = getattr(mod, name + "_2D", None)
 
         else:
             fun = getattr(mod, name, None)
 
         if not fun:
-            fun = getattr(mod, name+"_"+config.params.solver, None)
+            fun = getattr(mod, name + "_" + config.params.solver, None)
 
         if not fun:
-            fun = getattr(mod, name+"_"+config.mesh, None)
+            fun = getattr(mod, name + "_" + config.mesh, None)
 
         @wraps(func)
         def wrapped_function(*args, **kwargs):
             u0 = fun(*args, **kwargs)
             return u0
 
-    except: # Otherwise revert to default numpy implementation
+    except:  # Otherwise revert to default numpy implementation
         print(func.__name__ + ' not optimized')
+
         @wraps(func)
         def wrapped_function(*args, **kwargs):
             u0 = func(*args, **kwargs)
             return u0
 
     return wrapped_function
+
 
 try:
     from . import cython_double, cython_single

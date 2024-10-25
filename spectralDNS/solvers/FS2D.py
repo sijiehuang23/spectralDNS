@@ -13,26 +13,31 @@ from .NS import end_of_tstep
 
 
 def get_context():
-    """Set up context for 2D flUtuating Stokes solver (FS)"""
+    """Set up context for 2D fluctuating Stokes solver (FS)"""
     float, complex, mpitype = datatypes(params.precision)
     collapse_fourier = False if params.dealias == '3/2-rule' else True
     dim = len(params.N)
     def dtype(d): return float if d == dim - 1 else complex
-    V = [FunctionSpace(params.N[i], 'F', domain=(0, params.L[i]),
-                       dtype=dtype(i)) for i in range(dim)]
+    V = [FunctionSpace(params.N[i], 'F', domain=(0, params.L[i]), dtype=dtype(i)) for i in range(dim)]
 
-    kw0 = {'threads': params.threads,
-           'planner_effort': params.planner_effort['fft']}
-    T = TensorProductSpace(comm, V, dtype=float,
-                           slab=(params.decomposition == 'slab'),
-                           collapse_fourier=collapse_fourier, **kw0)
+    kw0 = {
+        'threads': params.threads,
+        'planner_effort': params.planner_effort['fft']
+    }
+    T = TensorProductSpace(
+        comm, V, dtype=float,
+        slab=(params.decomposition == 'slab'),
+        collapse_fourier=collapse_fourier, **kw0
+    )
     VT = VectorSpace(T)
     VW = CompositeSpace([T] * (dim**2))
 
     mask = T.get_mask_nyquist() if params.mask_nyquist else None
 
-    kw = {'padding_factor': 1.5 if params.dealias == '3/2-rule' else 1,
-          'dealias_direct': params.dealias == '2/3-rule'}
+    kw = {
+        'padding_factor': 1.5 if params.dealias == '3/2-rule' else 1,
+        'dealias_direct': params.dealias == '2/3-rule'
+    }
     Tp = T.get_dealiased(**kw)
     VTp = VectorSpace(Tp)
 
@@ -78,19 +83,23 @@ def get_context():
     dU = Function(VT)
     work = work_arrays()
 
-    hdf5file = FNS2DFile(
+    hdf5file = FS2DFile(
         config.params.solver,
         checkpoint={'space': VT,
-                    'data': {'0': {'U': [U_hat]}}},
-        results={'space': VT,
-                 'data': {'U': [U[0]],
-                          'V': [U[1]]}}
+                    'data': {'0': {'u_hat': [U_hat]}}},
+        results={
+            'space': VT,
+            'data': {
+                'u': [U[0]],
+                'v': [U[1]]
+            }
+        }
     )
 
     return config.AttributeDict(locals())
 
 
-class FNS2DFile(HDF5File):
+class FS2DFile(HDF5File):
     def update_components(self, U, U_hat, W, W_hat, **context):
         U = U_hat.backward(U)
         W = W_hat.backward(W)
