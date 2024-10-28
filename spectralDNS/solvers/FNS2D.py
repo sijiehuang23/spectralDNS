@@ -18,22 +18,26 @@ def get_context():
     collapse_fourier = False if params.dealias == '3/2-rule' else True
     dim = len(params.N)
     def dtype(d): return float if d == dim - 1 else complex
-    V = [FunctionSpace(params.N[i], 'F', domain=(0, params.L[i]),
-                       dtype=dtype(i)) for i in range(dim)]
+    V = [FunctionSpace(params.N[i], 'F', domain=(0, params.L[i]), dtype=dtype(i)) for i in range(dim)]
 
-    kw0 = {'threads': params.threads,
-           'planner_effort': params.planner_effort['fft']}
-    T = TensorProductSpace(comm, V, dtype=float,
-                           slab=(params.decomposition == 'slab'),
-                           collapse_fourier=collapse_fourier, **kw0)
+    kw0 = {
+        'threads': params.threads,
+        'planner_effort': params.planner_effort['fft']}
+    T = TensorProductSpace(
+        comm, V, dtype=float,
+        slab=(params.decomposition == 'slab'),
+        collapse_fourier=collapse_fourier, **kw0
+    )
     VT = VectorSpace(T)
     VM = CompositeSpace([T] * (dim + 1))
     VW = CompositeSpace([T] * (dim**2))
 
     mask = T.get_mask_nyquist() if params.mask_nyquist else None
 
-    kw = {'padding_factor': 1.5 if params.dealias == '3/2-rule' else 1,
-          'dealias_direct': params.dealias == '2/3-rule'}
+    kw = {
+        'padding_factor': 1.5 if params.dealias == '3/2-rule' else 1,
+        'dealias_direct': params.dealias == '2/3-rule'
+    }
     Tp = T.get_dealiased(**kw)
     VTp = VectorSpace(Tp)
     VMp = CompositeSpace([Tp] * (dim + 1))
@@ -55,31 +59,27 @@ def get_context():
     linear_operator = -params.nu * K2
 
     # Solution variables
-    Uc = Array(VM)
-    Uc_hat = Function(VM)
+    U = Array(VM)
+    U_hat = Function(VM)
     P = Array(T)
     P_hat = Function(T)
     curl = Array(T)
-    uc_dealias = Array(VMp)
-    # W = Array(VW)
-    # W_hat = Function(VW)
-    W = Array(VT)
-    W_hat = Function(VT)
+    u_dealias = Array(VMp)
+
+    if params.noise_type == 'thermal':
+        W = Array(VW)
+        W_hat = Function(VW)
+    elif params.noise_type == 'correlated':
+        W = Array(VT)
+        W_hat = Function(VT)
 
     nu_hat = Function(T)
-    # alpha_hat = Function(T)
 
     G = Array(T)
     G_hat = Function(T)
 
-    # Create views into large data structures
-    C = Uc[2]
-    C_hat = Uc_hat[2]
-    U = Uc[:2]
-    U_hat = Uc_hat[:2]
-
     # Primary variable
-    u = Uc_hat
+    u = U_hat
 
     # RHS and work arrays
     dU = Function(VM)
@@ -87,11 +87,17 @@ def get_context():
 
     hdf5file = FNS2DFile(
         config.params.solver,
-        checkpoint={'space': VT,
-                    'data': {'0': {'Uc': [Uc_hat]}}},
-        results={'space': VT,
-                 'data': {'U': [Uc[0]],
-                          'V': [Uc[1]]}}
+        checkpoint={
+            'space': VT,
+            'data': {'0': {'Uc': [U_hat]}}
+        },
+        results={
+            'space': VT,
+            'data': {
+                'u': [U[0]],
+                'v': [U[1]]
+            }
+        }
     )
 
     return config.AttributeDict(locals())
@@ -108,11 +114,6 @@ def get_velocity(U, U_hat, VT, **context):
     return U
 
 
-def get_scalar(C, Uc_hat, T, **context):
-    C = T.backward(Uc_hat[2], C)
-    return C
-
-
 def get_pressure(P, P_hat, T, **context):
     P = T.backward(-1j * P_hat, P)
     return P
@@ -122,12 +123,6 @@ def set_velocity(U, U_hat, VT, **context):
     """Compute velocity from context"""
     U_hat = VT.forward(U, U_hat)
     return U_hat
-
-
-def set_scalar(C, C_hat, T, **context):
-    """Compute velocity from context"""
-    C_hat = T.forward(C, C_hat)
-    return C_hat
 
 
 def generate_noise(N, W_hat, K2, **context):
@@ -189,28 +184,19 @@ def getConvection(convection):
 
     elif convection == "Vortex":
 
-        def Conv(rhs, uc_hat, work, Tp, VMp, K, uc_dealias):
-            uc_dealias = VMp.backward(uc_hat, uc_dealias)
-            u_dealias = uc_dealias[:2]
-            c_dealias = uc_dealias[2]
+        def Conv(rhs, u_hat, work, Tp, VMp, K, u_dealias):
+            u_dealias = VMp.backward(u_hat, u_dealias)
 
             # momentum equation
             curl_dealias = work[(u_dealias[0], 0, True)]
             curl_hat = work[(rhs[0], 0, True)]
 
             # curl_hat = cross2(curl_hat, K, uc_hat[:2])
-            curl_hat = 1j * (K[0] * uc_hat[1] - K[1] * uc_hat[0])
+            curl_hat = 1j * (K[0] * u_hat[1] - K[1] * u_hat[0])
             curl_dealias = Tp.backward(curl_hat, curl_dealias)
 
             rhs[0] = Tp.forward(u_dealias[1] * curl_dealias, rhs[0])
             rhs[1] = Tp.forward(-u_dealias[0] * curl_dealias, rhs[1])
-
-            # scalar equation
-            gradUC_hat = work[(uc_hat[:2], 0, True)]
-            for i in range(2):
-                gradUC_hat[i] = Tp.forward(u_dealias[i] * c_dealias, gradUC_hat[i])
-
-            rhs[2] = -1j * (K[0] * gradUC_hat[0] + K[1] * gradUC_hat[1])
 
             return rhs
 
@@ -224,7 +210,7 @@ def projection(rhs, P_hat, K_over_K2, K):
     P_hat = np.sum(rhs[:2] * K_over_K2, 0, out=P_hat)
 
     # Add pressure gradient
-    for i in range(rhs.shape[0] - 1):
+    for i in range(rhs.shape[0]):
         rhs[i] -= P_hat * K[i]
 
     return rhs
@@ -238,15 +224,17 @@ def add_diffusion(rhs, uc_hat, K2, nu, alpha, **context):
     return rhs
 
 
-def ComputeRHS(rhs, uc_hat, solver, W_A, W_B, wi, mag, work, K, K2, K_over_K2, P_hat, T, Tp,
-               VT, VMp, VW, uc_dealias, mask, W_hat, G_hat, nu_hat, **context):
+def ComputeRHS(rhs, u_hat, solver, W_A, W_B, wi, mag, work, K, K2, K_over_K2, P_hat, T, Tp,
+               VT, VMp, VW, u_dealias, mask, W_hat, G_hat, nu_hat, **context):
 
     # Compute nonlinear convection term
-    rhs = solver.conv(rhs, uc_hat, work, Tp, VMp, K, uc_dealias)
+    rhs = solver.conv(rhs, u_hat, work, Tp, VMp, K, u_dealias)
 
     # add thermal fluctuation
-    # rhs = solver.add_thermal_fluctuation(rhs, W_A, W_B, wi, mag, W_hat, K)
-    rhs = solver.add_correlated_noise(rhs, W_A, W_B, wi, mag, W_hat, G_hat, **context)
+    if params.noise_type == 'thermal':
+        rhs = solver.add_thermal_fluctuation(rhs, W_A, W_B, wi, mag, W_hat, K)
+    elif params.noise_type == 'correlated':
+        rhs = solver.add_correlated_noise(rhs, W_A, W_B, wi, mag, W_hat, G_hat, **context)
 
     if mask is not None:
         rhs.mask_nyquist(mask)
@@ -256,7 +244,9 @@ def ComputeRHS(rhs, uc_hat, solver, W_A, W_B, wi, mag, work, K, K2, K_over_K2, P
 
     # add diffusion
     if params.integrator.casefold() != 'implicitPC'.casefold():
-        # rhs = solver.add_diffusion(rhs, uc_hat, K2, params.nu, params.alpha)
-        rhs = solver.add_diffusion(rhs, uc_hat, K2, nu_hat, params.alpha)
+        if params.noise_type == 'thermal':
+            rhs = solver.add_diffusion(rhs, u_hat, K2, params.nu, params.alpha)
+        elif params.noise_type == 'correlated':
+            rhs = solver.add_diffusion(rhs, u_hat, K2, nu_hat, params.alpha)
 
     return rhs
