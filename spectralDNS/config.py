@@ -302,8 +302,8 @@ parser_Bq2D.add_argument(
     '--Pr', default=1.0, type=float, help='Prandtl number')
 parser_AD2D.add_argument('--advection_velocity',
                          default=[1.0, 0.0], type=float, help='Advection velocity', nargs=2)
-parser_FNS2D.add_argument('--alpha', default=0.01,
-                          type=float, help='Mass diffusivity', nargs=1)
+parser_FNS2D.add_argument('--noise_type', default='thermal', choices=('thermal', 'correlated'),
+                          type=str, help='Noise type; either thermal or correlated', nargs=1)
 parser_FNS2D.add_argument('--filter_length', default=[0, 0],
                           type=float, help='Characteristic length scale for spatial filter', nargs=2)
 parser_FNS2D.add_argument('--D', default=0.0,
