@@ -29,7 +29,6 @@ def get_context():
         collapse_fourier=collapse_fourier, **kw0
     )
     VT = VectorSpace(T)
-    VM = CompositeSpace([T] * (dim + 1))
     VW = CompositeSpace([T] * (dim**2))
 
     mask = T.get_mask_nyquist() if params.mask_nyquist else None
@@ -40,7 +39,6 @@ def get_context():
     }
     Tp = T.get_dealiased(**kw)
     VTp = VectorSpace(Tp)
-    VMp = CompositeSpace([Tp] * (dim + 1))
 
     # Mesh variables
     X = T.local_mesh(True)
@@ -59,12 +57,12 @@ def get_context():
     linear_operator = -params.nu * K2
 
     # Solution variables
-    U = Array(VM)
-    U_hat = Function(VM)
+    U = Array(VT)
+    U_hat = Function(VT)
     P = Array(T)
     P_hat = Function(T)
     curl = Array(T)
-    u_dealias = Array(VMp)
+    u_dealias = Array(VTp)
 
     if params.noise_type == 'thermal':
         W = Array(VW)
@@ -82,7 +80,7 @@ def get_context():
     u = U_hat
 
     # RHS and work arrays
-    dU = Function(VM)
+    dU = Function(VT)
     work = work_arrays()
 
     hdf5file = FNS2DFile(
@@ -104,9 +102,8 @@ def get_context():
 
 
 class FNS2DFile(HDF5File):
-    def update_components(self, Uc, Uc_hat, W, W_hat, **context):
-        Uc = Uc_hat.backward(Uc)
-        W = W_hat.backward(W)
+    def update_components(self, **context):
+        get_velocity(**context)
 
 
 def get_velocity(U, U_hat, VT, **context):
@@ -184,8 +181,8 @@ def getConvection(convection):
 
     elif convection == "Vortex":
 
-        def Conv(rhs, u_hat, work, Tp, VMp, K, u_dealias):
-            u_dealias = VMp.backward(u_hat, u_dealias)
+        def Conv(rhs, u_hat, work, Tp, VTp, K, u_dealias):
+            u_dealias = VTp.backward(u_hat, u_dealias)
 
             # momentum equation
             curl_dealias = work[(u_dealias[0], 0, True)]
@@ -216,19 +213,18 @@ def projection(rhs, P_hat, K_over_K2, K):
     return rhs
 
 
-def add_diffusion(rhs, uc_hat, K2, nu, alpha, **context):
-    rhs[0] -= nu * K2 * uc_hat[0]
-    rhs[1] -= nu * K2 * uc_hat[1]
-    rhs[2] -= alpha * K2 * uc_hat[2]
+def add_diffusion(rhs, u_hat, K2, nu, **context):
+    rhs[0] -= nu * K2 * u_hat[0]
+    rhs[1] -= nu * K2 * u_hat[1]
 
     return rhs
 
 
-def ComputeRHS(rhs, u_hat, solver, W_A, W_B, wi, mag, work, K, K2, K_over_K2, P_hat, T, Tp,
-               VT, VMp, VW, u_dealias, mask, W_hat, G_hat, nu_hat, **context):
+def ComputeRHS(rhs, u_hat, solver, W_A, W_B, wi, mag, work, K, K2, K_over_K2, P_hat, Tp,
+               VTp, u_dealias, mask, W_hat, G_hat, nu_hat, **context):
 
     # Compute nonlinear convection term
-    rhs = solver.conv(rhs, u_hat, work, Tp, VMp, K, u_dealias)
+    rhs = solver.conv(rhs, u_hat, work, Tp, VTp, K, u_dealias)
 
     # add thermal fluctuation
     if params.noise_type == 'thermal':
