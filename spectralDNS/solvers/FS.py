@@ -13,7 +13,7 @@ from .NS import end_of_tstep
 
 
 def get_context():
-    """Set up context for 2D fluctuating Stokes solver (FS)"""
+    """Set up context for 3D fluctuating Stokes solver (FS)"""
     float, complex, mpitype = datatypes(params.precision)
     collapse_fourier = False if params.dealias == '3/2-rule' else True
     dim = len(params.N)
@@ -91,7 +91,8 @@ def get_context():
             'space': VT,
             'data': {
                 'u': [U[0]],
-                'v': [U[1]]
+                'v': [U[1]],
+                'w': [U[2]]
             }
         }
     )
@@ -102,7 +103,6 @@ def get_context():
 class FS2DFile(HDF5File):
     def update_components(self, U, U_hat, W, W_hat, **context):
         U = U_hat.backward(U)
-        W = W_hat.backward(W)
 
 
 def get_velocity(U, U_hat, VT, **context):
@@ -129,7 +129,7 @@ def generate_noise(N, W_hat, K2, **context):
     W_A /= np.prod(N)**0.5
     W_B /= np.prod(N)**0.5
 
-    for i in range(2):
+    for i in range(shape[0]):
         W_A[i] *= np.where(K2 == 0, 0, 1)
         W_B[i] *= np.where(K2 == 0, 0, 1)
 
@@ -141,14 +141,20 @@ def add_thermal_fluctuation(rhs, W_A, W_B, wi, mag, w_hat, K, **context):
 
     # symmetrize
     w_hat[0] = W_i[0] + W_i[0]
-    w_hat[1] = W_i[1] + W_i[2]
-    w_hat[2] = W_i[2] + W_i[1]
-    w_hat[3] = W_i[3] + W_i[3]
+    w_hat[1] = W_i[1] + W_i[3]
+    w_hat[2] = W_i[2] + W_i[6]
+    w_hat[3] = W_i[3] + W_i[1]
+    w_hat[4] = W_i[4] + W_i[4]
+    w_hat[5] = W_i[5] + W_i[7]
+    w_hat[6] = W_i[6] + W_i[2]
+    w_hat[7] = W_i[7] + W_i[5]
+    w_hat[8] = W_i[8] + W_i[8]
     w_hat *= 0.5**0.5
 
     # take divergence and add to rhs
-    rhs[0] = 1j * (K[0] * w_hat[0] + K[1] * w_hat[1]) * mag
-    rhs[1] = 1j * (K[0] * w_hat[2] + K[1] * w_hat[3]) * mag
+    rhs[0] = 1j * (K[0] * w_hat[0] + K[1] * w_hat[1] + K[2] * w_hat[2]) * mag
+    rhs[1] = 1j * (K[0] * w_hat[3] + K[1] * w_hat[4] + K[2] * w_hat[5]) * mag
+    rhs[2] = 1j * (K[0] * w_hat[6] + K[1] * w_hat[7] + K[2] * w_hat[8]) * mag
 
     return rhs
 
@@ -159,10 +165,12 @@ def add_correlated_noise(rhs, W_A, W_B, wi, mag, w_hat, G_hat, **context):
     # filter
     w_hat[0] *= G_hat
     w_hat[1] *= G_hat
+    w_hat[2] *= G_hat
 
     # add to rhs
     rhs[0] = w_hat[0] * mag
     rhs[1] = w_hat[1] * mag
+    rhs[2] = w_hat[2] * mag
 
     return rhs
 
@@ -177,15 +185,18 @@ def getConvection(convection):
         def Conv(rhs, U_hat, work, Tp, K, u_dealias):
 
             # momentum equation
-            curl_dealias = work[(u_dealias[0], 0, True)]
-            curl_hat = work[(rhs[0], 0, True)]
+            curl_dealias = work[(u_dealias, 0, True)]
+            curl_hat = work[(rhs, 0, True)]
 
-            # curl_hat = cross2(curl_hat, K, u_hat[:2])
-            curl_hat = 1j * (K[0] * U_hat[1] - K[1] * U_hat[0])
+            curl_hat[0] = 1j * (K[1] * U_hat[2] - K[2] * U_hat[1])
+            curl_hat[1] = 1j * (K[2] * U_hat[0] - K[0] * U_hat[2])
+            curl_hat[2] = 1j * (K[0] * U_hat[1] - K[1] * U_hat[0])
+            
             curl_dealias = Tp.backward(curl_hat, curl_dealias)
 
-            rhs[0] = Tp.forward(u_dealias[1] * curl_dealias, rhs[0])
-            rhs[1] = Tp.forward(-u_dealias[0] * curl_dealias, rhs[1])
+            rhs[0] = Tp.forward(u_dealias[1] * curl_dealias[2] - u_dealias[2] * curl_dealias[1], rhs[0])
+            rhs[1] = Tp.forward(u_dealias[2] * curl_dealias[0] - u_dealias[0] * curl_dealias[2], rhs[0])
+            rhs[2] = Tp.forward(u_dealias[0] * curl_dealias[1] - u_dealias[1] * curl_dealias[0], rhs[0])
 
             return rhs
 
@@ -208,6 +219,7 @@ def projection(rhs, P_hat, K_over_K2, K):
 def add_diffusion(rhs, u_hat, K2, nu, **context):
     rhs[0] -= nu * K2 * u_hat[0]
     rhs[1] -= nu * K2 * u_hat[1]
+    rhs[2] -= nu * K2 * u_hat[2]
 
     return rhs
 
