@@ -5,9 +5,10 @@ from shenfun import ShenfunFile
 
 __all__ = ['HDF5File']
 
-#pylint: disable=dangerous-default-value,unused-argument
+# pylint: disable=dangerous-default-value,unused-argument
 
 comm = MPI.COMM_WORLD
+
 
 class HDF5File(object):
     """Class for storing and retrieving spectralDNS data
@@ -63,17 +64,22 @@ class HDF5File(object):
 
     def update(self, params, **kw):
         if self.cfile is None:
-            self.cfile = ShenfunFile(self.filename+'_c',
-                                     self.checkpoint['space'],
-                                     mode=params.filemode)
+            self.cfile = ShenfunFile(
+                self.filename + '_c',
+                self.checkpoint['space'],
+                mode=params.filemode
+            )
             self.cfile.open()
             self.cfile.f.attrs.create('tstep', 0)
             self.cfile.f.attrs.create('t', 0.0)
             self.cfile.close()
+
         if self.wfile is None:
-            self.wfile = ShenfunFile(self.filename+'_w',
-                                     self.results['space'],
-                                     mode=params.filemode)
+            self.wfile = ShenfunFile(
+                self.filename + '_w',
+                self.results['space'],
+                mode=params.filemode
+            )
 
         if params.tstep % params.write_result == 0:
             self.update_components(**kw)

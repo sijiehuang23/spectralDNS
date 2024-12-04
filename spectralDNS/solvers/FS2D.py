@@ -129,7 +129,7 @@ def generate_noise(N, W_hat, K2, **context):
     W_A /= np.prod(N)**0.5
     W_B /= np.prod(N)**0.5
 
-    for i in range(2):
+    for i in range(shape[0]):
         W_A[i] *= np.where(K2 == 0, 0, 1)
         W_B[i] *= np.where(K2 == 0, 0, 1)
 
@@ -144,7 +144,7 @@ def add_thermal_fluctuation(rhs, W_A, W_B, wi, mag, w_hat, K, **context):
     w_hat[1] = W_i[1] + W_i[2]
     w_hat[2] = W_i[2] + W_i[1]
     w_hat[3] = W_i[3] + W_i[3]
-    w_hat *= 0.5**0.5
+    w_hat *= np.sqrt(0.5)
 
     # take divergence and add to rhs
     rhs[0] = 1j * (K[0] * w_hat[0] + K[1] * w_hat[1]) * mag

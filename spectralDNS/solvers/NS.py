@@ -3,31 +3,39 @@ __date__ = "2014-11-07"
 __copyright__ = "Copyright (C) 2014-2018 " + __author__
 __license__ = "GNU Lesser GPL version 3 or any later version"
 
-#pylint: disable=unused-variable,unused-argument,function-redefined
+# pylint: disable=unused-variable,unused-argument,function-redefined
 
 from shenfun import FunctionSpace, TensorProductSpace, VectorSpace, \
     Array, Function
 from .spectralinit import *
+
 
 def get_context():
     """Set up context for classical (NS) solver"""
     float, complex, mpitype = datatypes(params.precision)
     collapse_fourier = False if params.dealias == '3/2-rule' else True
     dim = len(params.N)
-    dtype = lambda d: float if d == dim-1 else complex
-    V = [FunctionSpace(params.N[i], 'F', domain=(0, params.L[i]),
-                       dtype=dtype(i)) for i in range(dim)]
+    def dtype(d): return float if d == dim - 1 else complex
+    V = [
+        FunctionSpace(params.N[i], 'F', domain=(0, params.L[i]), dtype=dtype(i)) for i in range(dim)
+    ]
 
-    kw0 = {'threads': params.threads,
-           'planner_effort': params.planner_effort['fft']}
-    T = TensorProductSpace(comm, V, dtype=float,
-                           slab=(params.decomposition == 'slab'),
-                           collapse_fourier=collapse_fourier, **kw0)
+    kw0 = {
+        'threads': params.threads,
+        'planner_effort': params.planner_effort['fft']
+    }
+    T = TensorProductSpace(
+        comm, V, dtype=float,
+        slab=(params.decomposition == 'slab'),
+        collapse_fourier=collapse_fourier, **kw0
+    )
     VT = VectorSpace(T)
 
     # Different bases for nonlinear term, either 2/3-rule or 3/2-rule
-    kw = {'padding_factor': 1.5 if params.dealias == '3/2-rule' else 1,
-          'dealias_direct': params.dealias == '2/3-rule'}
+    kw = {
+        'padding_factor': 1.5 if params.dealias == '3/2-rule' else 1,
+        'dealias_direct': params.dealias == '2/3-rule'
+    }
     Tp = T.get_dealiased(**kw)
     VTp = VectorSpace(Tp)
 
@@ -41,7 +49,7 @@ def get_context():
         K[i] = K[i].astype(float)
     K2 = np.zeros(T.shape(True), dtype=float)
     for i in range(dim):
-        K2 += K[i]*K[i]
+        K2 += K[i] * K[i]
 
     K_over_K2 = np.zeros(VT.shape(True), dtype=float)
     for i in range(dim):
@@ -60,16 +68,23 @@ def get_context():
     # RHS array
     dU = Function(VT)
     curl = Array(VT)
-    Source = Function(VT) # Possible source term initialized to zero
+    Source = Function(VT)  # Possible source term initialized to zero
     work = work_arrays()
 
-    hdf5file = NSFile(config.params.solver,
-                      checkpoint={'space': VT,
-                                  'data': {'0': {'U': [U_hat]}}},
-                      results={'space': VT,
-                               'data': {'U': [U], 'P': [P]}})
+    hdf5file = NSFile(
+        config.params.solver,
+        checkpoint={
+            'space': VT,
+            'data': {'0': {'U': [U_hat]}}
+        },
+        results={
+            'space': VT,
+            'data': {'U': [U], 'P': [P]}
+        }
+    )
 
     return config.AttributeDict(locals())
+
 
 class NSFile(HDF5File):
     """Subclass HDF5File for appropriate updating of real components
@@ -78,36 +93,43 @@ class NSFile(HDF5File):
     that are to be stored. If more variables than U and P are
     wanted, then subclass HDF5Writer in the application.
     """
+
     def update_components(self, **context):
         """Transform to real data before storing the solution"""
         get_velocity(**context)
         get_pressure(**context)
+
 
 def get_curl(curl, U_hat, work, VT, K, **context):
     """Compute curl from context"""
     curl = compute_curl(curl, U_hat, work, VT, K)
     return curl
 
+
 def get_velocity(U, U_hat, VT, **context):
     """Compute velocity from context"""
     U = VT.backward(U_hat, U)
     return U
 
+
 def get_pressure(P, P_hat, T, **context):
     """Compute pressure from context"""
-    P = T.backward(-1j*P_hat, P)
+    P = T.backward(-1j * P_hat, P)
     return P
+
 
 def set_velocity(U, U_hat, VT, **context):
     """Compute velocity from context"""
     U_hat = VT.forward(U, U_hat)
     return U_hat
 
+
 def get_divergence(T, K, U_hat, mask, **context):
     div_u = Array(T)
-    div_u_hat = 1j*(K[0]*U_hat[0]+K[1]*U_hat[1]+K[2]*U_hat[2])
+    div_u_hat = 1j * (K[0] * U_hat[0] + K[1] * U_hat[1] + K[2] * U_hat[2])
     div_u = T.backward(div_u_hat, div_u)
     return div_u
+
 
 def end_of_tstep(context):
     # Make sure that the last step hits T exactly.
@@ -121,12 +143,14 @@ def end_of_tstep(context):
 
     return False
 
+
 def compute_curl(c, a, work, T, K):
     """c = curl(a) = F_inv(F(curl(a))) = F_inv(1j*K x a)"""
     curl_hat = work[(a, 0, False)]
     curl_hat = cross2(curl_hat, K, a)
     c = T.backward(curl_hat, c)
     return c
+
 
 def Cross(c, a, b, work, T):
     """c_k = F_k(a x b)"""
@@ -135,14 +159,16 @@ def Cross(c, a, b, work, T):
     c = T.forward(d, c)
     return c
 
+
 def standard_convection(rhs, u_dealias, U_hat, work, Tp, K):
     """rhs_i = u_j du_i/dx_j"""
     gradUi = work[(u_dealias, 1, False)]
     for i in range(3):
         for j in range(3):
-            gradUi[j] = Tp.backward(1j*K[j]*U_hat[i], gradUi[j])
-        rhs[i] = Tp.forward(np.sum(u_dealias*gradUi, 0), rhs[i])
+            gradUi[j] = Tp.backward(1j * K[j] * U_hat[i], gradUi[j])
+        rhs[i] = Tp.forward(np.sum(u_dealias * gradUi, 0), rhs[i])
     return rhs
+
 
 def divergence_convection(rhs, u_dealias, work, Tp, K, add=False):
     """rhs_i = div(u_i u_j)"""
@@ -150,16 +176,17 @@ def divergence_convection(rhs, u_dealias, work, Tp, K, add=False):
         rhs.fill(0)
     UUi_hat = work[(rhs, 0, False)]
     for i in range(3):
-        UUi_hat[i] = Tp.forward(u_dealias[0]*u_dealias[i], UUi_hat[i])
-    rhs[0] += 1j*(K[0]*UUi_hat[0] + K[1]*UUi_hat[1] + K[2]*UUi_hat[2])
-    rhs[1] += 1j*K[0]*UUi_hat[1]
-    rhs[2] += 1j*K[0]*UUi_hat[2]
-    UUi_hat[0] = Tp.forward(u_dealias[1]*u_dealias[1], UUi_hat[0])
-    UUi_hat[1] = Tp.forward(u_dealias[1]*u_dealias[2], UUi_hat[1])
-    UUi_hat[2] = Tp.forward(u_dealias[2]*u_dealias[2], UUi_hat[2])
-    rhs[1] += (1j*K[1]*UUi_hat[0] + 1j*K[2]*UUi_hat[1])
-    rhs[2] += (1j*K[1]*UUi_hat[1] + 1j*K[2]*UUi_hat[2])
+        UUi_hat[i] = Tp.forward(u_dealias[0] * u_dealias[i], UUi_hat[i])
+    rhs[0] += 1j * (K[0] * UUi_hat[0] + K[1] * UUi_hat[1] + K[2] * UUi_hat[2])
+    rhs[1] += 1j * K[0] * UUi_hat[1]
+    rhs[2] += 1j * K[0] * UUi_hat[2]
+    UUi_hat[0] = Tp.forward(u_dealias[1] * u_dealias[1], UUi_hat[0])
+    UUi_hat[1] = Tp.forward(u_dealias[1] * u_dealias[2], UUi_hat[1])
+    UUi_hat[2] = Tp.forward(u_dealias[2] * u_dealias[2], UUi_hat[2])
+    rhs[1] += (1j * K[1] * UUi_hat[0] + 1j * K[2] * UUi_hat[1])
+    rhs[2] += (1j * K[1] * UUi_hat[1] + 1j * K[2] * UUi_hat[2])
     return rhs
+
 
 def getConvection(convection):
 
@@ -200,21 +227,23 @@ def getConvection(convection):
     Conv.convection = convection
     return Conv
 
+
 @optimizer
 def add_pressure_diffusion(rhs, u_hat, nu, K2, K, P_hat, K_over_K2):
     """Add contributions from pressure and diffusion to the rhs"""
 
     # Compute pressure (To get actual pressure multiply by 1j)
-    P_hat = np.sum(rhs*K_over_K2, 0, out=P_hat)
+    P_hat = np.sum(rhs * K_over_K2, 0, out=P_hat)
 
     # Subtract pressure gradient
     for i in range(rhs.shape[0]):
-        rhs[i] -= P_hat*K[i]
+        rhs[i] -= P_hat * K[i]
 
     # Subtract contribution from diffusion
-    rhs -= nu*K2*u_hat
+    rhs -= nu * K2 * u_hat
 
     return rhs
+
 
 def ComputeRHS(rhs, u_hat, solver, work, Tp, VTp, P_hat, K, K2, u_dealias,
                K_over_K2, Source, mask, **context):
